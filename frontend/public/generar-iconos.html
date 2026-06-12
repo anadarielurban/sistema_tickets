@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head><title>Generar Iconos</title></head>
+<body>
+  <canvas id="c192" width="192" height="192"></canvas>
+  <canvas id="c512" width="512" height="512"></canvas>
+  <script>
+    function dibujar(canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#2563eb';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'white';
+      ctx.font = `${canvas.width * 0.5}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🏛️', canvas.width/2, canvas.height/2);
+      const a = document.createElement('a');
+      a.download = `icon-${canvas.width}.png`;
+      a.href = canvas.toDataURL();
+      a.click();
+    }
+    dibujar(document.getElementById('c192'));
+    setTimeout(() => dibujar(document.getElementById('c512')), 500);
+  </script>
+  <p>Descargando íconos...</p>
+</body>
+</html>

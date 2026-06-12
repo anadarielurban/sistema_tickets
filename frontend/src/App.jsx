@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import CrearTicket from './pages/CrearTicket';
 import TicketsLista from './pages/TicketsLista';
 import Diagnostico from './pages/Diagnostico';
+import Dashboard from './pages/Dashboard';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -24,9 +25,10 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-      <Route path="/" element={<PrivateRoute>{user?.rol === 'solicitante' ? <CrearTicket /> : <TicketsLista />}</PrivateRoute>} />
+      <Route path="/" element={<PrivateRoute>{user?.rol === 'solicitante' ? <CrearTicket /> : user?.rol === 'admin' ? <Dashboard /> : <TicketsLista />}</PrivateRoute>} />
       <Route path="/crear" element={<PrivateRoute><CrearTicket /></PrivateRoute>} />
       <Route path="/tickets" element={<PrivateRoute><TicketsLista /></PrivateRoute>} />
+      <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
       <Route path="/diagnostico/:id" element={<PrivateRoute><Diagnostico /></PrivateRoute>} />
     </Routes>
   );
