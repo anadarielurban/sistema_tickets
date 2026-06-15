@@ -20,7 +20,7 @@ export default function Diagnostico() {
   const consultarIA = async () => {
     const textoParaIA = form.problema_encontrado || form.diagnostico;
     if (!textoParaIA || textoParaIA.length < 3) {
-      toast.error('Describe un poco más el problema para consultar la IA');
+      toast.error('Describe más el problema para consultar la IA');
       return;
     }
     
@@ -28,14 +28,11 @@ export default function Diagnostico() {
     setIaSugerencia(null);
     
     try {
-      const res = await axios.post('http://localhost:5000/sugerir', {
-        texto: textoParaIA,
-      });
+      const res = await axios.post('http://localhost:5000/sugerir', { texto: textoParaIA });
       setIaSugerencia(res.data);
-      toast.success(`🧠 IA sugiere: ${res.data.categoria} (${res.data.confianza}%)`);
+      toast.success(`🧠 IA: ${res.data.categoria} (${res.data.confianza}%)`);
     } catch (err) {
-      toast.error('IA no disponible. Diagnostica manualmente.');
-      console.error(err);
+      toast.error('IA no disponible');
     } finally {
       setIaLoading(false);
     }
@@ -45,10 +42,9 @@ export default function Diagnostico() {
     if (iaSugerencia) {
       setForm({
         ...form,
-        diagnostico: iaSugerencia.diagnostico,
-        solucion: iaSugerencia.solucion,
+        diagnostico: iaSugerencia.diagnostico_probable || iaSugerencia.diagnostico || '',
       });
-      toast.success('✅ Sugerencia de IA aplicada. Puedes modificarla.');
+      toast.success('✅ Diagnóstico sugerido aplicado');
       setIaSugerencia(null);
     }
   };
@@ -56,7 +52,7 @@ export default function Diagnostico() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.diagnostico || !form.solucion) {
-      toast.error('Llena el diagnóstico y la solución');
+      toast.error('Llena diagnóstico y solución');
       return;
     }
     setLoading(true);
@@ -104,7 +100,7 @@ export default function Diagnostico() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
+    <div className="min-h-screen bg-gray-100 p-4 pb-32">
       <div className="max-w-lg mx-auto bg-white rounded-2xl shadow-lg p-6">
         <h2 className="text-xl font-bold mb-4">🔍 Diagnosticar Ticket</h2>
 
@@ -125,9 +121,6 @@ export default function Diagnostico() {
                 <option key={i} value={p}>{p}</option>
               ))}
             </select>
-            <p className="text-xs text-gray-400 mt-1">
-              También puedes escribir manualmente en el diagnóstico
-            </p>
           </div>
 
           {/* 2. Diagnóstico */}
@@ -139,7 +132,7 @@ export default function Diagnostico() {
               value={form.diagnostico}
               onChange={(e) => setForm({...form, diagnostico: e.target.value})}
               required
-              rows={3}
+              rows={2}
               className="w-full p-3 border rounded-lg"
               placeholder="Describe lo que diagnosticaste..."
             />
@@ -154,7 +147,7 @@ export default function Diagnostico() {
               value={form.solucion}
               onChange={(e) => setForm({...form, solucion: e.target.value})}
               required
-              rows={3}
+              rows={2}
               className="w-full p-3 border rounded-lg"
               placeholder="¿Cómo lo resolviste?"
             />
@@ -164,7 +157,9 @@ export default function Diagnostico() {
           <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="font-bold text-purple-900">🧠 Asistente IA</span>
-              <span className="text-xs text-purple-600 bg-purple-100 px-2 py-1 rounded-full">GRATIS - LOCAL</span>
+              <span className="text-xs text-purple-600 bg-purple-100 px-2 py-1 rounded-full">
+                SOLO CLASIFICA
+              </span>
             </div>
             
             <button
@@ -173,47 +168,45 @@ export default function Diagnostico() {
               disabled={iaLoading}
               className="w-full py-3 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 disabled:opacity-50 transition-all"
             >
-              {iaLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="animate-spin">🧠</span> Analizando...
-                </span>
-              ) : (
-                '🧠 Sugerir diagnóstico con IA'
-              )}
+              {iaLoading ? '🧠 Analizando...' : '🧠 Sugerir clasificación con IA'}
             </button>
 
             {iaSugerencia && (
-              <div className="mt-3 bg-white rounded-lg p-3 border border-purple-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-purple-800">
-                    🤖 Sugerencia ({iaSugerencia.confianza}% confianza)
-                  </p>
-                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
-                    {iaSugerencia.categoria}
-                  </span>
-                </div>
+              <div className="mt-3 space-y-3">
                 
-                <div className="text-sm">
-                  <p><strong>🔍 Diagnóstico:</strong> {iaSugerencia.diagnostico}</p>
-                  <p><strong>✅ Solución:</strong> {iaSugerencia.solucion}</p>
-                  <p><strong>⏱️ Tiempo estimado:</strong> {iaSugerencia.tiempo_estimado_minutos} min</p>
+                {/* RESULTADO PRINCIPAL */}
+                <div className="bg-white rounded-lg p-3 border border-purple-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-bold text-purple-800">
+                      🤖 Sugerencia IA ({iaSugerencia.confianza}% confianza)
+                    </p>
+                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
+                      {iaSugerencia.categoria}
+                    </span>
+                  </div>
+                  <p className="text-sm"><strong>🔍 Diagnóstico probable:</strong> {iaSugerencia.diagnostico_probable || iaSugerencia.diagnostico}</p>
+                  <p className="text-xs text-gray-400 mt-2 italic">
+                    💡 Esto es solo una sugerencia. Tú pones el diagnóstico y la solución final.
+                  </p>
                 </div>
 
+                {/* CASOS SIMILARES */}
                 {iaSugerencia.casos_similares?.length > 0 && (
-                  <div className="text-xs text-gray-500">
-                    <p className="font-medium">📚 Casos similares encontrados:</p>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-xs font-bold text-gray-600 mb-1">📚 Casos similares encontrados:</p>
                     {iaSugerencia.casos_similares.map((c, i) => (
-                      <p key={i} className="ml-2">• "{c.texto}" ({c.similitud}%)</p>
+                      <p key={i} className="text-xs text-gray-500">• "{c.texto}" ({c.similitud}% similar)</p>
                     ))}
                   </div>
                 )}
 
+                {/* BOTÓN USAR SUGERENCIA */}
                 <button
                   type="button"
                   onClick={usarSugerencia}
-                  className="w-full py-2 bg-green-500 text-white text-sm rounded-lg font-bold hover:bg-green-600"
+                  className="w-full py-2 bg-purple-600 text-white text-sm rounded-lg font-bold hover:bg-purple-700"
                 >
-                  ✅ Usar esta sugerencia
+                  📋 Usar este diagnóstico probable
                 </button>
                 <button
                   type="button"
@@ -228,9 +221,7 @@ export default function Diagnostico() {
 
           {/* 4. Causa */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              🎯 Causa raíz
-            </label>
+            <label className="block text-sm font-bold text-gray-700 mb-2">🎯 Causa raíz</label>
             <select
               value={form.causa}
               onChange={(e) => setForm({...form, causa: e.target.value})}
@@ -253,12 +244,10 @@ export default function Diagnostico() {
               onChange={(e) => setForm({...form, equipo_en_sistemas: e.target.checked})}
               className="w-5 h-5 rounded"
             />
-            <span className="text-sm font-medium">
-              🔧 ¿El equipo se queda en el departamento de Sistemas?
-            </span>
+            <span className="text-sm font-medium">🔧 ¿Equipo se queda en sistemas?</span>
           </label>
 
-          {/* Botón guardar */}
+          {/* Guardar */}
           <button
             type="submit"
             disabled={loading}
