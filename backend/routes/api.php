@@ -3,10 +3,15 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\EstadisticasController;
+use App\Http\Controllers\Api\ReporteController;
 use Illuminate\Support\Facades\Route;
 
 // Rutas públicas
 Route::post('/login', [AuthController::class, 'login']);
+
+// Reportes PDF (públicos para demo)
+Route::get('/reportes/tickets-pdf', [ReporteController::class, 'ticketsPDF']);
+Route::get('/reportes/estadisticas-pdf', [ReporteController::class, 'estadisticasPDF']);
 
 // Rutas protegidas
 Route::middleware('auth:sanctum')->group(function () {
