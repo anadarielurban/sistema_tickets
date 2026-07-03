@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaTicketAlt, FaClock, FaCheckCircle, FaSpinner, FaUsers, FaExclamationTriangle,
   FaSearch, FaBell, FaChartBar, FaTimesCircle, FaArrowUp, FaArrowDown,
-  FaDownload, FaBuilding, FaCog, FaClipboardList, FaChartLine,
+  FaDownload, FaBuilding, FaClipboardList, FaChartLine,
   FaFilter, FaSync, FaStar, FaPlus
 } from 'react-icons/fa';
 
@@ -17,7 +17,6 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  // Cargar datos REALES de la API
   useEffect(() => { cargarStats(); }, []);
 
   const cargarStats = async () => {
@@ -26,24 +25,13 @@ export default function Dashboard() {
     try {
       const token = localStorage.getItem('token');
       const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-      
       const res = await axios.get('http://localhost:8000/api/estadisticas/dashboard', config);
-      console.log('✅ Datos reales cargados:', res.data);
       setStats(res.data);
     } catch (err) {
-      console.warn('⚠️ Usando datos de prueba:', err.message);
       setError('Mostrando datos locales - Sin conexión al servidor');
-      
-      // Datos de prueba basados en la BD real
       setStats({
-        total_mes: 3,
-        pendientes: 0,
-        en_proceso: 1,
-        resueltos: 2,
-        cancelados: 0,
-        tiempo_promedio: 8,
-        satisfaccion: 95,
-        eficiencia: 85,
+        total_mes: 3, pendientes: 0, en_proceso: 1, resueltos: 2, cancelados: 0,
+        tiempo_promedio: 8, satisfaccion: 95, eficiencia: 85,
         por_tipo: [
           { tipo: 'computadora', total: 3, tendencia: 'up' },
           { tipo: 'impresora', total: 0, tendencia: 'stable' },
@@ -59,26 +47,18 @@ export default function Dashboard() {
         por_dependencia: [
           { nombre: 'Presidencia Municipal', total: 1, color: '#2C5282' },
           { nombre: 'Tesorería Municipal', total: 1, color: '#48BB78' },
-          { nombre: 'Secretaría del Ayuntamiento', total: 0, color: '#ED8936' },
-          { nombre: 'Obras Públicas', total: 0, color: '#ECC94B' },
           { nombre: 'Desarrollo Social', total: 1, color: '#9F7AEA' }
         ],
-        por_mes: [
-          { mes: 'Jun', total: 3 }
-        ],
+        por_mes: [{ mes: 'Jun', total: 3 }],
         tiempo_resolucion: [
-          { rango: '< 15 min', total: 2 },
-          { rango: '15-30 min', total: 0 },
-          { rango: '30-60 min', total: 1 },
-          { rango: '> 60 min', total: 0 }
+          { rango: '< 15 min', total: 2 }, { rango: '30-60 min', total: 1 }
         ],
         usuarios_frecuentes: [
           { nombre: 'María García', total: 1, dependencia: 'Tesorería' },
           { nombre: 'Luis Hernández', total: 1, dependencia: 'Sistemas' }
         ],
         equipos_problematicos: [
-          { titulo: 'PC no enciende', total: 1, tipo: 'computadora', severidad: 'alta' },
-          { titulo: 'se traba', total: 1, tipo: 'computadora', severidad: 'media' }
+          { titulo: 'PC no enciende', total: 1, tipo: 'computadora', severidad: 'alta' }
         ],
         ultimos_tickets: [
           { folio: 'TKT-2026-0003', titulo: 'mi pc no funciona, se traba mucho', estado: 'resuelto', fecha: '2026-06-15', auxiliar: 'Luis H.', prioridad: 'alta' },
@@ -87,8 +67,7 @@ export default function Dashboard() {
         ],
         notificaciones: [
           { id: 1, text: 'Ticket #0003 resuelto por Luis H.', time: '15 jun', color: 'green', tipo: 'exito' },
-          { id: 2, text: 'Ticket #0002 sigue en proceso', time: '13 jun', color: 'orange', tipo: 'info' },
-          { id: 3, text: 'Nuevo ticket de María García', time: '12 jun', color: 'blue', tipo: 'info' }
+          { id: 2, text: 'Ticket #0002 sigue en proceso', time: '13 jun', color: 'orange', tipo: 'info' }
         ]
       });
     } finally { 
@@ -99,28 +78,12 @@ export default function Dashboard() {
 
   const c = { 
     azul: '#2C5282', azulOscuro: '#1A365D', azulClaro: '#4299E1',
-    verde: '#48BB78', verdeOscuro: '#2F855A', naranja: '#ED8936', 
-    amarillo: '#ECC94B', rojo: '#E53E3E', gris: '#718096',
-    morado: '#9F7AEA', rosa: '#ED64A6'
+    verde: '#48BB78', naranja: '#ED8936', amarillo: '#ECC94B', 
+    rojo: '#E53E3E', gris: '#718096', morado: '#9F7AEA'
   };
 
-  const estadoColor = { 
-    pendiente: c.naranja, 
-    en_proceso: c.amarillo, 
-    resuelto: c.verde, 
-    cancelado: c.rojo 
-  };
-  
-  const prioridadColor = {
-    critica: c.rojo,
-    alta: c.naranja,
-    media: c.amarillo,
-    baja: c.verde
-  };
-
-  const iconos = { 
-    computadora: '🖥️', impresora: '🖨️', red: '🌐', otro: '❓' 
-  };
+  const estadoColor = { pendiente: c.naranja, en_proceso: c.amarillo, resuelto: c.verde, cancelado: c.rojo };
+  const iconos = { computadora: '🖥️', impresora: '🖨️', red: '🌐', otro: '❓' };
 
   const tabs = [
     { id: 'general', label: 'General', icon: FaChartBar, color: c.azul },
@@ -130,35 +93,75 @@ export default function Dashboard() {
     { id: 'dependencias', label: 'Dependencias', icon: FaBuilding, color: c.amarillo },
   ];
 
-  // ============================================
-  // LOADING
-  // ============================================
+  // ⬇️ ⬇️ ⬇️ LOADER CON PUNTITOS ⬇️ ⬇️ ⬇️
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col">
-        <div className="w-full h-12 bg-white shadow-md"><img src="/cenefa.png" alt="" className="w-full h-full object-cover" /></div>
-        <div className="flex-1 flex items-center justify-center bg-gray-50">
-          <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity }} className="text-center">
-            <FaCog className="text-6xl text-blue-700 mx-auto mb-4" />
-            <p className="text-xl font-bold text-gray-700">Cargando Dashboard...</p>
-            <div className="w-48 h-2 bg-gray-200 rounded-full mt-4 mx-auto overflow-hidden">
-              <motion.div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-green-500"
-                animate={{ width: ['0%', '100%'] }} transition={{ duration: 1.5, repeat: Infinity }} />
-            </div>
-          </motion.div>
+      <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-blue-50">
+        <div className="w-full h-10 md:h-12 bg-white shadow-sm flex-shrink-0">
+          <img src="/cenefa.png" alt="" className="w-full h-full object-cover" />
         </div>
-        <div className="w-full h-12 bg-white shadow-md"><img src="/cenefa.png" alt="" className="w-full h-full object-cover" style={{ transform: 'rotate(180deg)' }} /></div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-8">
+            {/* Logo o icono sutil */}
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <img src="/logo-ramos.png" alt="Ramos Arizpe" className="h-24 md:h-28 mx-auto opacity-60" />
+            </motion.div>
+
+            {/* Texto */}
+            <div>
+              <p className="text-xl font-extrabold text-gray-700 mb-1">Cargando Panel de Control</p>
+              <p className="text-sm text-gray-400">Gobierno Municipal de Ramos Arizpe</p>
+            </div>
+
+            {/* Puntitos animados */}
+            <div className="flex items-center justify-center gap-2">
+              {[c.azul, c.verde, c.naranja, c.amarillo].map((color, i) => (
+                <motion.div
+                  key={i}
+                  className="w-3 h-3 rounded-full"
+                  style={{ background: color }}
+                  animate={{
+                    y: [0, -20, 0],
+                    scale: [1, 1.5, 1],
+                    opacity: [0.5, 1, 0.5],
+                  }}
+                  transition={{
+                    duration: 1.2,
+                    repeat: Infinity,
+                    delay: i * 0.15,
+                    ease: "easeInOut",
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Barra sutil */}
+            <div className="w-40 h-1 bg-gray-200 rounded-full mx-auto overflow-hidden">
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: `linear-gradient(90deg, ${c.azul}, ${c.verde}, ${c.naranja}, ${c.amarillo})` }}
+                animate={{ x: ['-100%', '100%'] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="w-full h-10 md:h-12 bg-white shadow-sm flex-shrink-0">
+          <img src="/cenefa.png" alt="" className="w-full h-full object-cover" style={{ transform: 'rotate(180deg)' }} />
+        </div>
       </div>
     );
   }
 
   // ============================================
-  // COMPONENTES DE TABS (Versión compacta)
+  // TABS (sin cambios, igual que antes)
   // ============================================
 
   const TabGeneral = () => (
     <div className="space-y-6">
-      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { t: 'Total', v: stats.total_mes, i: FaTicketAlt, co: c.azul },
@@ -176,7 +179,6 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Gráfico + Últimos tickets */}
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl p-5 shadow-lg">
           <h3 className="font-extrabold text-gray-800 mb-4">📈 Tickets por Mes</h3>
@@ -191,7 +193,6 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
-
         <div className="bg-white rounded-2xl p-5 shadow-lg">
           <h3 className="font-extrabold text-gray-800 mb-4">📋 Últimos Tickets</h3>
           <div className="space-y-2 max-h-60 overflow-auto">
@@ -228,23 +229,21 @@ export default function Dashboard() {
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-lg">
           <h3 className="font-extrabold text-gray-800 mb-4">📋 Todos los Tickets</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-gray-400 text-xs border-b">
-                <th className="pb-2">Folio</th><th className="pb-2">Título</th><th className="pb-2">Estado</th><th className="pb-2">Fecha</th>
-              </tr></thead>
-              <tbody>
-                {stats.ultimos_tickets?.map((t, i) => (
-                  <tr key={i} className="border-t hover:bg-gray-50">
-                    <td className="py-2 text-xs font-mono">{t.folio}</td>
-                    <td className="py-2">{t.titulo}</td>
-                    <td className="py-2"><span className="px-2 py-0.5 rounded-full text-[10px] text-white font-bold" style={{ background: estadoColor[t.estado] }}>{t.estado.replace('_', ' ')}</span></td>
-                    <td className="py-2 text-xs text-gray-400">{t.fecha}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-gray-400 text-xs border-b">
+              <th className="pb-2">Folio</th><th className="pb-2">Título</th><th className="pb-2">Estado</th><th className="pb-2">Fecha</th>
+            </tr></thead>
+            <tbody>
+              {stats.ultimos_tickets?.map((t, i) => (
+                <tr key={i} className="border-t hover:bg-gray-50">
+                  <td className="py-2 text-xs font-mono">{t.folio}</td>
+                  <td className="py-2">{t.titulo}</td>
+                  <td className="py-2"><span className="px-2 py-0.5 rounded-full text-[10px] text-white font-bold" style={{ background: estadoColor[t.estado] }}>{t.estado.replace('_', ' ')}</span></td>
+                  <td className="py-2 text-xs text-gray-400">{t.fecha}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -253,21 +252,17 @@ export default function Dashboard() {
   const TabRendimiento = () => (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 text-white text-center">
-          <FaClock className="text-3xl mx-auto mb-2 opacity-50" />
-          <p className="text-3xl font-extrabold">{stats.tiempo_promedio} min</p>
-          <p className="text-sm opacity-80">Tiempo promedio</p>
-        </div>
-        <div className="bg-gradient-to-br from-green-600 to-green-800 rounded-2xl p-6 text-white text-center">
-          <FaStar className="text-3xl mx-auto mb-2 opacity-50" />
-          <p className="text-3xl font-extrabold">{stats.satisfaccion}%</p>
-          <p className="text-sm opacity-80">Satisfacción</p>
-        </div>
-        <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl p-6 text-white text-center">
-          <FaChartLine className="text-3xl mx-auto mb-2 opacity-50" />
-          <p className="text-3xl font-extrabold">{stats.eficiencia}%</p>
-          <p className="text-sm opacity-80">Eficiencia</p>
-        </div>
+        {[
+          { v: stats.tiempo_promedio + ' min', t: 'Tiempo prom.', i: FaClock, bg: 'from-blue-600 to-blue-800' },
+          { v: stats.satisfaccion + '%', t: 'Satisfacción', i: FaStar, bg: 'from-green-600 to-green-800' },
+          { v: stats.eficiencia + '%', t: 'Eficiencia', i: FaChartLine, bg: 'from-purple-600 to-purple-800' },
+        ].map((item, i) => (
+          <div key={i} className={`bg-gradient-to-br ${item.bg} rounded-2xl p-6 text-white text-center`}>
+            <item.i className="text-3xl mx-auto mb-2 opacity-50" />
+            <p className="text-3xl font-extrabold">{item.v}</p>
+            <p className="text-sm opacity-80">{item.t}</p>
+          </div>
+        ))}
       </div>
       <div className="bg-white rounded-2xl p-5 shadow-lg">
         <h3 className="font-extrabold text-gray-800 mb-4">👥 Usuarios Frecuentes</h3>
@@ -310,18 +305,12 @@ export default function Dashboard() {
       {stats.por_dependencia?.map((dep, i) => (
         <motion.div key={i} whileHover={{ scale: 1.02 }} className="bg-white rounded-2xl p-5 shadow-lg">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold" style={{ background: dep.color }}>
-              <FaBuilding />
-            </div>
-            <div className="flex-1">
-              <p className="font-extrabold">{dep.nombre}</p>
-              <p className="text-sm text-gray-400">{dep.total} tickets</p>
-            </div>
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold" style={{ background: dep.color }}><FaBuilding /></div>
+            <div className="flex-1"><p className="font-extrabold">{dep.nombre}</p><p className="text-sm text-gray-400">{dep.total} tickets</p></div>
           </div>
           <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
             <motion.div className="h-full rounded-full" style={{ background: dep.color }}
-              initial={{ width: 0 }} animate={{ width: `${Math.min((dep.total / 5) * 100, 100)}%` }}
-              transition={{ delay: i * 0.2 }} />
+              initial={{ width: 0 }} animate={{ width: `${Math.min((dep.total / 5) * 100, 100)}%` }} transition={{ delay: i * 0.2 }} />
           </div>
         </motion.div>
       ))}
@@ -333,12 +322,10 @@ export default function Dashboard() {
   // ============================================
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-blue-50">
-      {/* CENEFA SUPERIOR */}
       <div className="w-full h-10 md:h-12 bg-white shadow-sm flex-shrink-0">
         <img src="/cenefa.png" alt="" className="w-full h-full object-cover" />
       </div>
 
-      {/* HEADER */}
       <div className="bg-white border-b shadow-sm flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
@@ -369,22 +356,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* BARRA DE COLORES */}
       <div className="w-full h-1 flex-shrink-0" style={{ background: `linear-gradient(90deg, ${c.azul}, ${c.verde}, ${c.naranja}, ${c.amarillo})` }} />
 
-      {/* ALERTA DE DATOS LOCALES */}
       {error && (
-        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-center text-xs text-yellow-700">
-          ⚠️ {error}
-        </div>
+        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-center text-xs text-yellow-700">⚠️ {error}</div>
       )}
 
-      {/* TABS */}
       <div className="bg-white border-b shadow-sm flex-shrink-0 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto">
           {tabs.map(tab => (
-            <motion.button key={tab.id} whileTap={{ scale: 0.95 }}
-              onClick={() => setActiveTab(tab.id)}
+            <motion.button key={tab.id} whileTap={{ scale: 0.95 }} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase border-b-2 whitespace-nowrap
                 ${activeTab === tab.id ? 'border-current' : 'border-transparent text-gray-400'}`}
               style={activeTab === tab.id ? { color: tab.color, borderColor: tab.color } : {}}>
@@ -394,7 +375,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* CONTENIDO */}
       <div className="flex-1 p-4 max-w-7xl mx-auto w-full overflow-auto">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
@@ -407,10 +387,8 @@ export default function Dashboard() {
         </AnimatePresence>
       </div>
 
-      {/* BARRA DE COLORES INFERIOR */}
       <div className="w-full h-1 flex-shrink-0" style={{ background: `linear-gradient(90deg, ${c.amarillo}, ${c.naranja}, ${c.verde}, ${c.azul})` }} />
 
-      {/* CENEFA INFERIOR */}
       <div className="w-full h-10 md:h-12 bg-white shadow-sm flex-shrink-0">
         <img src="/cenefa.png" alt="" className="w-full h-full object-cover" style={{ transform: 'rotate(180deg)' }} />
       </div>
