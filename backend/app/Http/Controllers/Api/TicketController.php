@@ -43,7 +43,6 @@ class TicketController extends Controller
         }
 
         $tickets = $query->orderBy('created_at', 'desc')->paginate(10);
-
         return response()->json($tickets);
     }
 
@@ -76,7 +75,6 @@ class TicketController extends Controller
             ]);
 
             $this->registrarHistorial($ticket, 'creacion', 'Ticket creado por ' . $user->nombre_completo);
-            
             DB::commit();
 
             return response()->json([
@@ -87,11 +85,7 @@ class TicketController extends Controller
             
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error al crear ticket: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al crear el ticket: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
@@ -106,10 +100,7 @@ class TicketController extends Controller
         $user = $request->user();
 
         if ($ticket->estado != 'pendiente') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ticket ya fue tomado'
-            ], 400);
+            return response()->json(['success' => false, 'message' => 'Ticket ya fue tomado'], 400);
         }
 
         try {
@@ -122,7 +113,6 @@ class TicketController extends Controller
             ]);
 
             $this->registrarHistorial($ticket, 'tomado', 'Tomado por ' . $user->nombre_completo);
-            
             DB::commit();
 
             return response()->json([
@@ -133,29 +123,18 @@ class TicketController extends Controller
             
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error al tomar ticket: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al tomar el ticket'
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Error al tomar el ticket'], 500);
         }
     }
 
     // ==========================================
-    // GUARDAR DIAGNÓSTICO - VERSIÓN FINAL CORREGIDA
+    // ✅ DIAGNÓSTICO CORREGIDO - GUARDA FOTO
     // ==========================================
     public function diagnosticar(Ticket $ticket, Request $request)
     {
         $user = $request->user();
-        
-        Log::info('=== DIAGNÓSTICO INICIADO ===');
-        Log::info('Ticket ID: ' . $ticket->id . ' | Estado: ' . $ticket->estado);
-        Log::info('Usuario: ' . $user->nombre_completo . ' (ID: ' . $user->id . ')');
-        Log::info('¿Tiene foto?: ' . ($request->hasFile('foto_comprobacion') ? 'SÍ' : 'NO'));
-        Log::info('Datos recibidos: ', $request->except(['foto_comprobacion']));
 
         try {
-            // Preparar datos para guardar
             $datos = [
                 'problema_encontrado' => $request->problema_encontrado ?? '',
                 'diagnostico' => $request->diagnostico ?? '',
@@ -167,54 +146,55 @@ class TicketController extends Controller
                 'fecha_ingreso' => $request->equipo_en_sistemas ? now() : null,
             ];
 
-            // Calcular tiempo si hay inicio de atención
             if ($ticket->inicio_atencion) {
                 $datos['tiempo_minutos'] = now()->diffInMinutes($ticket->inicio_atencion);
             }
 
-            // 📸 PROCESAR FOTO SI SE ENVIÓ
+            // ✅ GUARDAR FOTO
             if ($request->hasFile('foto_comprobacion')) {
-                $foto = $request->file('foto_comprobacion');
+                $archivo = $request->file('foto_comprobacion');
+                $extension = $archivo->getClientOriginalExtension();
+                $nombre = 'ticket_' . $ticket->id . '_' . time() . '.' . $extension;
+                $destino = storage_path('app/public/comprobaciones/');
                 
-                // Verificar que la foto sea válida
-                if ($foto->isValid()) {
-                    $nombreArchivo = 'ticket_' . $ticket->id . '_' . time() . '.' . $foto->getClientOriginalExtension();
-                    
-                    // Crear directorio si no existe
-                    $directorio = storage_path('app/public/comprobaciones');
-                    if (!file_exists($directorio)) {
-                        mkdir($directorio, 0755, true);
-                        Log::info('Directorio creado: ' . $directorio);
-                    }
-                    
-                    // Guardar la foto usando storeAs (método correcto de Laravel)
-                    $ruta = $foto->storeAs('comprobaciones', $nombreArchivo, 'public');
-                    
-                    // Guardar la ruta en los datos
-                    $datos['foto_comprobacion'] = $ruta;
-                    
-                    Log::info('✅ Foto guardada correctamente en: ' . $ruta);
-                    Log::info('Ruta completa: ' . storage_path('app/public/' . $ruta));
-                } else {
-                    Log::error('❌ Foto no válida: ' . $foto->getErrorMessage());
+                if (!file_exists($destino)) {
+                    mkdir($destino, 0777, true);
                 }
-            } else {
-                Log::warning('⚠️ No se recibió ninguna foto');
+                
+                // Intentar mover el archivo
+                try {
+                    $archivo->move($destino, $nombre);
+                    if (file_exists($destino . $nombre)) {
+                        $datos['foto_comprobacion'] = 'comprobaciones/' . $nombre;
+                        Log::info('✅ Foto movida con move(): ' . $datos['foto_comprobacion']);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error con move(): ' . $e->getMessage());
+                }
+            } 
+            // Si hasFile falla, intentar con $_FILES
+            elseif (!empty($_FILES['foto_comprobacion']['tmp_name'])) {
+                $extension = pathinfo($_FILES['foto_comprobacion']['name'], PATHINFO_EXTENSION);
+                $nombre = 'ticket_' . $ticket->id . '_' . time() . '.' . $extension;
+                $destino = storage_path('app/public/comprobaciones/');
+                
+                if (!file_exists($destino)) {
+                    mkdir($destino, 0777, true);
+                }
+                
+                if (move_uploaded_file($_FILES['foto_comprobacion']['tmp_name'], $destino . $nombre)) {
+                    $datos['foto_comprobacion'] = 'comprobaciones/' . $nombre;
+                    Log::info('✅ Foto movida con move_uploaded_file(): ' . $datos['foto_comprobacion']);
+                }
             }
 
-            // ACTUALIZAR TICKET EN BASE DE DATOS
-            Log::info('Datos a guardar: ', $datos);
+            // ✅ GUARDAR EN BD
             $ticket->update($datos);
             
-            // Verificar que se guardó correctamente
-            $ticketActualizado = $ticket->fresh();
-            Log::info('✅ Ticket actualizado correctamente');
-            Log::info('Estado final: ' . $ticketActualizado->estado);
-            Log::info('Foto en BD: ' . ($ticketActualizado->foto_comprobacion ?? 'NULL'));
+            Log::info('Datos guardados: ' . json_encode($datos));
 
-            // Registrar en historial
             $mensaje = 'Resuelto por ' . $user->nombre_completo;
-            if ($request->hasFile('foto_comprobacion')) {
+            if (!empty($datos['foto_comprobacion'])) {
                 $mensaje .= ' 📸 Con foto de comprobación';
             }
             $this->registrarHistorial($ticket, 'resuelto', $mensaje);
@@ -222,20 +202,13 @@ class TicketController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => '✅ Ticket resuelto correctamente',
-                'foto_guardada' => $ticketActualizado->foto_comprobacion ?? 'Sin foto',
-                'ticket' => $ticketActualizado->load(['solicitante', 'auxiliar', 'dependencia', 'historial']),
+                'foto_guardada' => $datos['foto_comprobacion'] ?? 'Sin foto',
+                'ticket' => $ticket->fresh(['solicitante', 'auxiliar', 'dependencia', 'historial']),
             ]);
             
         } catch (\Exception $e) {
-            Log::error('❌ ERROR en diagnosticar: ' . $e->getMessage());
-            Log::error('Línea: ' . $e->getLine());
-            Log::error('Archivo: ' . $e->getFile());
-            Log::error('Trace: ' . $e->getTraceAsString());
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al guardar: ' . $e->getMessage(),
-            ], 500);
+            Log::error('Error en diagnosticar: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
@@ -243,24 +216,14 @@ class TicketController extends Controller
     {
         try {
             DB::beginTransaction();
-            
             $ticket->update(['estado' => 'cancelado']);
             $this->registrarHistorial($ticket, 'cancelado', 'Cancelado por ' . $request->user()->nombre_completo);
-            
             DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Ticket cancelado exitosamente',
-            ]);
-            
+            return response()->json(['success' => true, 'message' => 'Ticket cancelado exitosamente']);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error al cancelar ticket: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al cancelar el ticket'
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Error al cancelar el ticket'], 500);
         }
     }
 
@@ -268,18 +231,9 @@ class TicketController extends Controller
     {
         $user = $request->user();
 
-        $resueltos = Ticket::where('auxiliar_id', $user->id)
-            ->where('estado', 'resuelto')
-            ->whereDate('updated_at', today())
-            ->count();
-
-        $pendientes = Ticket::whereNull('auxiliar_id')
-            ->where('estado', 'pendiente')
-            ->count();
-
-        $enProceso = Ticket::where('auxiliar_id', $user->id)
-            ->where('estado', 'en_proceso')
-            ->count();
+        $resueltos = Ticket::where('auxiliar_id', $user->id)->where('estado', 'resuelto')->whereDate('updated_at', today())->count();
+        $pendientes = Ticket::whereNull('auxiliar_id')->where('estado', 'pendiente')->count();
+        $enProceso = Ticket::where('auxiliar_id', $user->id)->where('estado', 'en_proceso')->count();
 
         return response()->json([
             'success' => true,

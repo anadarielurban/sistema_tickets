@@ -15,7 +15,8 @@ class Ticket extends Model
         'folio', 'solicitante_id', 'dependencia_id', 'creado_por',
         'auxiliar_id', 'tipo', 'titulo', 'descripcion', 'ubicacion',
         'estado', 'problema_encontrado', 'diagnostico', 'solucion',
-        'causa', 'equipo_en_sistemas', 'fecha_ingreso', 'fecha_salida',
+        'causa', 'equipo_en_sistemas', 'foto_comprobacion', // ✅ AGREGADO
+        'fecha_ingreso', 'fecha_salida',
         'entregado_a', 'inicio_atencion', 'fin_atencion', 'tiempo_minutos',
         'es_ayuda',
     ];
