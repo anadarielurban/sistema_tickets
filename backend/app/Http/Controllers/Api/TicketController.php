@@ -7,21 +7,20 @@ use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class TicketController extends Controller
 {
-    // Listar tickets (con filtros)
     public function index(Request $request)
     {
         $user = $request->user();
         $query = Ticket::with(['solicitante', 'dependencia', 'auxiliar', 'creadoPor']);
 
-        // Si es solicitante, solo ve sus tickets
         if ($user->esSolicitante()) {
             $query->where('solicitante_id', $user->id);
         }
 
-        // Si es auxiliar, ve los suyos y los pendientes
         if ($user->esAuxiliar()) {
             $query->where(function($q) use ($user) {
                 $q->where('auxiliar_id', $user->id)
@@ -29,7 +28,6 @@ class TicketController extends Controller
             });
         }
 
-        // Filtros
         if ($request->filled('estado')) {
             $query->where('estado', $request->estado);
         }
@@ -49,7 +47,6 @@ class TicketController extends Controller
         return response()->json($tickets);
     }
 
-    // Crear ticket
     public function store(Request $request)
     {
         $user = $request->user();
@@ -63,111 +60,216 @@ class TicketController extends Controller
             'ubicacion' => 'nullable|string|max:255',
         ]);
 
-        $ticket = Ticket::create([
-            'solicitante_id' => $request->solicitante_id,
-            'dependencia_id' => $request->dependencia_id,
-            'creado_por' => $user->id,
-            'tipo' => $request->tipo,
-            'titulo' => $request->titulo,
-            'descripcion' => $request->descripcion,
-            'ubicacion' => $request->ubicacion,
-            'estado' => 'pendiente',
-            'es_ayuda' => $user->id != $request->solicitante_id,
-        ]);
+        try {
+            DB::beginTransaction();
+            
+            $ticket = Ticket::create([
+                'solicitante_id' => $request->solicitante_id,
+                'dependencia_id' => $request->dependencia_id,
+                'creado_por' => $user->id,
+                'tipo' => $request->tipo,
+                'titulo' => $request->titulo,
+                'descripcion' => $request->descripcion,
+                'ubicacion' => $request->ubicacion,
+                'estado' => 'pendiente',
+                'es_ayuda' => $user->id != $request->solicitante_id,
+            ]);
 
-        $ticket->registrarHistorial('creacion', 'Ticket creado por ' . $user->nombre_completo);
+            $this->registrarHistorial($ticket, 'creacion', 'Ticket creado por ' . $user->nombre_completo);
+            
+            DB::commit();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Ticket creado - Folio: ' . $ticket->folio,
-            'ticket' => $ticket->load(['solicitante', 'dependencia']),
-        ], 201);
+            return response()->json([
+                'success' => true,
+                'message' => 'Ticket creado - Folio: ' . $ticket->folio,
+                'ticket' => $ticket->load(['solicitante', 'dependencia']),
+            ], 201);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al crear ticket: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear el ticket: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
-    // Ver detalle de ticket
     public function show(Ticket $ticket)
     {
         $ticket->load(['solicitante', 'dependencia', 'auxiliar', 'creadoPor', 'historial.usuario']);
-
         return response()->json($ticket);
     }
 
-    // Tomar ticket (auxiliar se asigna)
     public function tomar(Ticket $ticket, Request $request)
     {
         $user = $request->user();
 
         if ($ticket->estado != 'pendiente') {
-            return response()->json(['message' => 'Ticket ya fue tomado'], 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'Ticket ya fue tomado'
+            ], 400);
         }
 
-        $ticket->update([
-            'auxiliar_id' => $user->id,
-            'estado' => 'en_proceso',
-            'inicio_atencion' => now(),
-        ]);
+        try {
+            DB::beginTransaction();
+            
+            $ticket->update([
+                'auxiliar_id' => $user->id,
+                'estado' => 'en_proceso',
+                'inicio_atencion' => now(),
+            ]);
 
-        $ticket->registrarHistorial('tomado', 'Tomado por ' . $user->nombre_completo);
+            $this->registrarHistorial($ticket, 'tomado', 'Tomado por ' . $user->nombre_completo);
+            
+            DB::commit();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Ticket tomado',
-            'ticket' => $ticket->fresh(['auxiliar']),
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Ticket tomado exitosamente',
+                'ticket' => $ticket->fresh(['auxiliar']),
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al tomar ticket: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al tomar el ticket'
+            ], 500);
+        }
     }
 
-    // Guardar diagnóstico (auxiliar)
+    // ==========================================
+    // GUARDAR DIAGNÓSTICO - VERSIÓN FINAL CORREGIDA
+    // ==========================================
     public function diagnosticar(Ticket $ticket, Request $request)
     {
-        $request->validate([
-            'problema_encontrado' => 'required|string',
-            'diagnostico' => 'required|string',
-            'solucion' => 'required|string',
-            'causa' => 'required|in:error_usuario,error_sistemas,falla_hardware,falla_software,configuracion,otro',
-            'equipo_en_sistemas' => 'boolean',
-        ]);
+        $user = $request->user();
+        
+        Log::info('=== DIAGNÓSTICO INICIADO ===');
+        Log::info('Ticket ID: ' . $ticket->id . ' | Estado: ' . $ticket->estado);
+        Log::info('Usuario: ' . $user->nombre_completo . ' (ID: ' . $user->id . ')');
+        Log::info('¿Tiene foto?: ' . ($request->hasFile('foto_comprobacion') ? 'SÍ' : 'NO'));
+        Log::info('Datos recibidos: ', $request->except(['foto_comprobacion']));
 
-        $ticket->update([
-            'problema_encontrado' => $request->problema_encontrado,
-            'diagnostico' => $request->diagnostico,
-            'solucion' => $request->solucion,
-            'causa' => $request->causa,
-            'estado' => 'resuelto',
-            'fin_atencion' => now(),
-            'tiempo_minutos' => $ticket->inicio_atencion 
-                ? now()->diffInMinutes($ticket->inicio_atencion) 
-                : null,
-            'equipo_en_sistemas' => $request->equipo_en_sistemas ?? false,
-            'fecha_ingreso' => $request->equipo_en_sistemas ? now() : null,
-        ]);
+        try {
+            // Preparar datos para guardar
+            $datos = [
+                'problema_encontrado' => $request->problema_encontrado ?? '',
+                'diagnostico' => $request->diagnostico ?? '',
+                'solucion' => $request->solucion ?? '',
+                'causa' => $request->causa ?? 'otro',
+                'estado' => 'resuelto',
+                'fin_atencion' => now(),
+                'equipo_en_sistemas' => $request->equipo_en_sistemas ?? false,
+                'fecha_ingreso' => $request->equipo_en_sistemas ? now() : null,
+            ];
 
-        $ticket->registrarHistorial('resuelto', 'Resuelto por ' . $request->user()->nombre_completo);
+            // Calcular tiempo si hay inicio de atención
+            if ($ticket->inicio_atencion) {
+                $datos['tiempo_minutos'] = now()->diffInMinutes($ticket->inicio_atencion);
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Diagnóstico guardado',
-            'ticket' => $ticket->fresh(),
-        ]);
+            // 📸 PROCESAR FOTO SI SE ENVIÓ
+            if ($request->hasFile('foto_comprobacion')) {
+                $foto = $request->file('foto_comprobacion');
+                
+                // Verificar que la foto sea válida
+                if ($foto->isValid()) {
+                    $nombreArchivo = 'ticket_' . $ticket->id . '_' . time() . '.' . $foto->getClientOriginalExtension();
+                    
+                    // Crear directorio si no existe
+                    $directorio = storage_path('app/public/comprobaciones');
+                    if (!file_exists($directorio)) {
+                        mkdir($directorio, 0755, true);
+                        Log::info('Directorio creado: ' . $directorio);
+                    }
+                    
+                    // Guardar la foto usando storeAs (método correcto de Laravel)
+                    $ruta = $foto->storeAs('comprobaciones', $nombreArchivo, 'public');
+                    
+                    // Guardar la ruta en los datos
+                    $datos['foto_comprobacion'] = $ruta;
+                    
+                    Log::info('✅ Foto guardada correctamente en: ' . $ruta);
+                    Log::info('Ruta completa: ' . storage_path('app/public/' . $ruta));
+                } else {
+                    Log::error('❌ Foto no válida: ' . $foto->getErrorMessage());
+                }
+            } else {
+                Log::warning('⚠️ No se recibió ninguna foto');
+            }
+
+            // ACTUALIZAR TICKET EN BASE DE DATOS
+            Log::info('Datos a guardar: ', $datos);
+            $ticket->update($datos);
+            
+            // Verificar que se guardó correctamente
+            $ticketActualizado = $ticket->fresh();
+            Log::info('✅ Ticket actualizado correctamente');
+            Log::info('Estado final: ' . $ticketActualizado->estado);
+            Log::info('Foto en BD: ' . ($ticketActualizado->foto_comprobacion ?? 'NULL'));
+
+            // Registrar en historial
+            $mensaje = 'Resuelto por ' . $user->nombre_completo;
+            if ($request->hasFile('foto_comprobacion')) {
+                $mensaje .= ' 📸 Con foto de comprobación';
+            }
+            $this->registrarHistorial($ticket, 'resuelto', $mensaje);
+
+            return response()->json([
+                'success' => true,
+                'message' => '✅ Ticket resuelto correctamente',
+                'foto_guardada' => $ticketActualizado->foto_comprobacion ?? 'Sin foto',
+                'ticket' => $ticketActualizado->load(['solicitante', 'auxiliar', 'dependencia', 'historial']),
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('❌ ERROR en diagnosticar: ' . $e->getMessage());
+            Log::error('Línea: ' . $e->getLine());
+            Log::error('Archivo: ' . $e->getFile());
+            Log::error('Trace: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al guardar: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
-    // Cancelar ticket
     public function cancelar(Ticket $ticket, Request $request)
     {
-        $ticket->update(['estado' => 'cancelado']);
-        $ticket->registrarHistorial('cancelado', 'Cancelado por ' . $request->user()->nombre_completo);
+        try {
+            DB::beginTransaction();
+            
+            $ticket->update(['estado' => 'cancelado']);
+            $this->registrarHistorial($ticket, 'cancelado', 'Cancelado por ' . $request->user()->nombre_completo);
+            
+            DB::commit();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Ticket cancelado',
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Ticket cancelado exitosamente',
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al cancelar ticket: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cancelar el ticket'
+            ], 500);
+        }
     }
 
-    // Mis tickets del día (para auxiliar)
     public function misTicketsHoy(Request $request)
     {
         $user = $request->user();
 
-        $tickets = Ticket::where('auxiliar_id', $user->id)
+        $resueltos = Ticket::where('auxiliar_id', $user->id)
+            ->where('estado', 'resuelto')
             ->whereDate('updated_at', today())
             ->count();
 
@@ -175,9 +277,33 @@ class TicketController extends Controller
             ->where('estado', 'pendiente')
             ->count();
 
+        $enProceso = Ticket::where('auxiliar_id', $user->id)
+            ->where('estado', 'en_proceso')
+            ->count();
+
         return response()->json([
-            'resueltos_hoy' => $tickets,
+            'success' => true,
+            'resueltos_hoy' => $resueltos,
             'pendientes' => $pendientes,
+            'en_proceso' => $enProceso,
         ]);
+    }
+
+    private function registrarHistorial(Ticket $ticket, string $accion, string $descripcion)
+    {
+        try {
+            if (DB::getSchemaBuilder()->hasTable('historial_tickets')) {
+                DB::table('historial_tickets')->insert([
+                    'ticket_id' => $ticket->id,
+                    'usuario_id' => auth()->id() ?? 1,
+                    'accion' => $accion,
+                    'descripcion' => $descripcion,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('No se pudo registrar historial: ' . $e->getMessage());
+        }
     }
 }

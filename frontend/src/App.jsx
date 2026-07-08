@@ -7,6 +7,7 @@ import CrearTicket from './pages/CrearTicket';
 import TicketsLista from './pages/TicketsLista';
 import Diagnostico from './pages/Diagnostico';
 import Dashboard from './pages/Dashboard';
+import VerTicket from './pages/VerTicket'; // ✅ NUEVO IMPORT
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -30,6 +31,7 @@ function AppRoutes() {
       <Route path="/tickets" element={<PrivateRoute><TicketsLista /></PrivateRoute>} />
       <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
       <Route path="/diagnostico/:id" element={<PrivateRoute><Diagnostico /></PrivateRoute>} />
+      <Route path="/ver-ticket/:id" element={<PrivateRoute><VerTicket /></PrivateRoute>} /> {/* ✅ NUEVA RUTA */}
     </Routes>
   );
 }

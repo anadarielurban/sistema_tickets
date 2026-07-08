@@ -26,7 +26,10 @@ export default function TicketsLista() {
   const cargarTickets = async () => {
     setIsRefreshing(true);
     try {
-      const res = await axios.get('http://localhost:8000/api/tickets');
+      const token = localStorage.getItem('token');
+      const res = await axios.get('http://localhost:8000/api/tickets', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       setTickets(res.data.data || res.data);
     } catch (err) {
       console.error(err);
@@ -38,7 +41,10 @@ export default function TicketsLista() {
 
   const tomarTicket = async (id) => {
     try {
-      await axios.post(`http://localhost:8000/api/tickets/${id}/tomar`);
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:8000/api/tickets/${id}/tomar`, {}, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       cargarTickets();
     } catch (err) {
       console.error(err);
@@ -139,7 +145,6 @@ export default function TicketsLista() {
 
           {/* BUSCADOR + FILTROS */}
           <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 space-y-3">
-            {/* Buscador */}
             <div className="relative">
               <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -151,7 +156,6 @@ export default function TicketsLista() {
               />
             </div>
 
-            {/* Filtros de estado */}
             <div className="flex gap-1.5 overflow-x-auto pb-1">
               {filtrosEstado.map((filtro) => (
                 <motion.button
@@ -192,7 +196,6 @@ export default function TicketsLista() {
                   <div className="p-4 md:p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        {/* Folio y tipo */}
                         <div className="flex items-center gap-2 mb-2">
                           <span className="text-xs font-mono font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                             {ticket.folio}
@@ -201,10 +204,8 @@ export default function TicketsLista() {
                           <span className="text-xs text-gray-400 capitalize">{ticket.tipo}</span>
                         </div>
 
-                        {/* Título */}
                         <h3 className="text-base font-bold text-gray-800 mb-2">{ticket.titulo}</h3>
 
-                        {/* Info */}
                         <div className="flex flex-wrap gap-3 text-xs text-gray-500">
                           {ticket.solicitante && (
                             <span className="flex items-center gap-1">
@@ -226,7 +227,6 @@ export default function TicketsLista() {
                           )}
                         </div>
 
-                        {/* Solución si está resuelto */}
                         {ticket.solucion && (
                           <div className="mt-2 p-2 bg-green-50 rounded-lg text-xs text-green-700">
                             ✅ {ticket.solucion}
@@ -234,7 +234,6 @@ export default function TicketsLista() {
                         )}
                       </div>
 
-                      {/* Estado */}
                       <div className="flex flex-col items-end gap-2 flex-shrink-0">
                         <span className="px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm"
                           style={{ background: estados[ticket.estado]?.color }}>
@@ -270,7 +269,8 @@ export default function TicketsLista() {
                           </motion.button>
                         </Link>
                       )}
-                      <Link to={`/diagnostico/${ticket.id}`} className="flex items-center gap-1 px-3 py-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                      {/* ✅ CORREGIDO: Redirige a VerTicket */}
+                      <Link to={`/ver-ticket/${ticket.id}`} className="flex items-center gap-1 px-3 py-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
                         <FaEye /> Ver detalle
                       </Link>
                     </div>
@@ -280,17 +280,13 @@ export default function TicketsLista() {
             </div>
           )}
 
-          {/* Contador */}
           <div className="text-center text-xs text-gray-400">
             Mostrando {ticketsFiltrados.length} de {tickets.length} tickets
           </div>
         </motion.div>
       </div>
 
-      {/* BARRA DE COLORES INFERIOR */}
       <div className="w-full h-1 flex-shrink-0" style={{ background: `linear-gradient(90deg, ${c.amarillo}, ${c.naranja}, ${c.verde}, ${c.azul})` }} />
-
-      {/* CENEFA INFERIOR */}
       <div className="w-full h-10 md:h-12 bg-white shadow-sm flex-shrink-0">
         <img src="/cenefa.png" alt="" className="w-full h-full object-cover" style={{ transform: 'rotate(180deg)' }} />
       </div>

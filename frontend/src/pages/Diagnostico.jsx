@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -30,7 +30,9 @@ export default function Diagnostico() {
   const [previewFoto, setPreviewFoto] = useState(null);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
 
-  useState(() => { setIsVisible(true); }, []);
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
 
   // Manejar selección de foto
   const handleFotoSeleccionada = (e) => {
@@ -112,6 +114,15 @@ export default function Diagnostico() {
     setSubiendoFoto(true);
     
     try {
+      // ✅ OBTENER TOKEN DE AUTENTICACIÓN
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        toast.error('No hay sesión activa. Redirigiendo al login...');
+        setTimeout(() => navigate('/login'), 1500);
+        return;
+      }
+      
       // Crear FormData para enviar archivo
       const formData = new FormData();
       formData.append('problema_encontrado', form.problema_encontrado);
@@ -119,17 +130,53 @@ export default function Diagnostico() {
       formData.append('solucion', form.solucion);
       formData.append('causa', form.causa);
       formData.append('equipo_en_sistemas', form.equipo_en_sistemas ? '1' : '0');
-      formData.append('foto_comprobacion', fotoComprobacion);
       
-      await axios.post(`http://localhost:8000/api/tickets/${id}/diagnosticar`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // ✅ CORREGIDO: Agregar foto con nombre de archivo
+      formData.append('foto_comprobacion', fotoComprobacion, fotoComprobacion.name);
       
-      toast.success('✅ Ticket resuelto con foto de comprobación');
-      navigate('/tickets');
+      console.log('📤 Enviando diagnóstico...');
+      console.log('Token:', token.substring(0, 20) + '...');
+      console.log('Foto:', fotoComprobacion.name, '(', (fotoComprobacion.size / 1024).toFixed(1), 'KB)');
+      
+      // ✅ ENVIAR CON TOKEN EN LOS HEADERS
+      const response = await axios.post(
+        `http://localhost:8000/api/tickets/${id}/diagnosticar`, 
+        formData, 
+        {
+          headers: { 
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      console.log('✅ Respuesta del servidor:', response.data);
+      
+      if (response.data.success) {
+        toast.success('✅ Ticket resuelto con foto de comprobación');
+        setTimeout(() => navigate('/tickets'), 1000);
+      } else {
+        toast.error(response.data.message || 'Error al guardar');
+      }
+      
     } catch (err) {
-      toast.error('Error al guardar');
-      console.error(err);
+      console.error('❌ Error completo:', err);
+      console.error('Respuesta del servidor:', err.response?.data);
+      console.error('Status:', err.response?.status);
+      
+      if (err.response?.status === 401) {
+        toast.error('Sesión expirada. Inicia sesión nuevamente.');
+        localStorage.removeItem('token');
+        setTimeout(() => navigate('/login'), 1500);
+      } else if (err.response?.status === 422) {
+        const errores = err.response.data.errors;
+        const mensajeError = errores ? Object.values(errores).flat().join(', ') : 'Error de validación';
+        toast.error(mensajeError);
+      } else if (err.response?.status === 500) {
+        toast.error('Error del servidor: ' + (err.response.data.message || 'Error interno'));
+      } else {
+        toast.error('Error al guardar: ' + (err.response?.data?.message || err.message));
+      }
     } finally {
       setLoading(false);
       setSubiendoFoto(false);
@@ -250,7 +297,7 @@ export default function Diagnostico() {
                 />
               </div>
 
-              {/* 📸 FOTO DE COMPROBACIÓN - NUEVA SECCIÓN */}
+              {/* 📸 FOTO DE COMPROBACIÓN */}
               <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
