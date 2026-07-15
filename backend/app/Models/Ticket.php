@@ -15,7 +15,7 @@ class Ticket extends Model
         'folio', 'solicitante_id', 'dependencia_id', 'creado_por',
         'auxiliar_id', 'tipo', 'titulo', 'descripcion', 'ubicacion',
         'estado', 'problema_encontrado', 'diagnostico', 'solucion',
-        'causa', 'equipo_en_sistemas', 'foto_comprobacion', // ✅ AGREGADO
+        'causa', 'equipo_en_sistemas', 'foto_comprobacion',
         'fecha_ingreso', 'fecha_salida',
         'entregado_a', 'inicio_atencion', 'fin_atencion', 'tiempo_minutos',
         'es_ayuda',
@@ -45,6 +45,9 @@ class Ticket extends Model
     public function auxiliar() { return $this->belongsTo(User::class, 'auxiliar_id'); }
     public function dependencia() { return $this->belongsTo(Dependencia::class); }
     public function historial() { return $this->hasMany(HistorialTicket::class); }
+    
+    // ✅ NUEVA RELACIÓN
+    public function detalles() { return $this->hasMany(DetalleTicket::class); }
 
     public function registrarHistorial($accion, $descripcion)
     {

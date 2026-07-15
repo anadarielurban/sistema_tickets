@@ -5,7 +5,7 @@ import {
   FaTicketAlt, FaClock, FaCheckCircle, FaSpinner, FaUsers, FaExclamationTriangle,
   FaSearch, FaBell, FaChartBar, FaTimesCircle, FaArrowUp, FaArrowDown,
   FaDownload, FaBuilding, FaClipboardList, FaChartLine,
-  FaFilter, FaSync, FaStar, FaPlus
+  FaFilter, FaSync, FaStar, FaPlus, FaTrophy, FaLaptop, FaPrint, FaGlobe, FaCalendarAlt
 } from 'react-icons/fa';
 
 export default function Dashboard() {
@@ -91,6 +91,7 @@ export default function Dashboard() {
     { id: 'rendimiento', label: 'Rendimiento', icon: FaChartLine, color: c.naranja },
     { id: 'auxiliares', label: 'Auxiliares', icon: FaUsers, color: c.azulClaro },
     { id: 'dependencias', label: 'Dependencias', icon: FaBuilding, color: c.amarillo },
+    { id: 'ranking', label: '🏆 Ranking', icon: FaTrophy, color: '#D69E2E' },
   ];
 
   // ⬇️ ⬇️ ⬇️ LOADER CON PUNTITOS ⬇️ ⬇️ ⬇️
@@ -102,50 +103,24 @@ export default function Dashboard() {
         </div>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-8">
-            {/* Logo o icono sutil */}
-            <motion.div
-              animate={{ scale: [1, 1.1, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
+            <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 2, repeat: Infinity }}>
               <img src="/logo-ramos.png" alt="Ramos Arizpe" className="h-24 md:h-28 mx-auto opacity-60" />
             </motion.div>
-
-            {/* Texto */}
             <div>
               <p className="text-xl font-extrabold text-gray-700 mb-1">Cargando Panel de Control</p>
               <p className="text-sm text-gray-400">Gobierno Municipal de Ramos Arizpe</p>
             </div>
-
-            {/* Puntitos animados */}
             <div className="flex items-center justify-center gap-2">
               {[c.azul, c.verde, c.naranja, c.amarillo].map((color, i) => (
-                <motion.div
-                  key={i}
-                  className="w-3 h-3 rounded-full"
-                  style={{ background: color }}
-                  animate={{
-                    y: [0, -20, 0],
-                    scale: [1, 1.5, 1],
-                    opacity: [0.5, 1, 0.5],
-                  }}
-                  transition={{
-                    duration: 1.2,
-                    repeat: Infinity,
-                    delay: i * 0.15,
-                    ease: "easeInOut",
-                  }}
-                />
+                <motion.div key={i} className="w-3 h-3 rounded-full" style={{ background: color }}
+                  animate={{ y: [0, -20, 0], scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }} />
               ))}
             </div>
-
-            {/* Barra sutil */}
             <div className="w-40 h-1 bg-gray-200 rounded-full mx-auto overflow-hidden">
-              <motion.div
-                className="h-full rounded-full"
+              <motion.div className="h-full rounded-full"
                 style={{ background: `linear-gradient(90deg, ${c.azul}, ${c.verde}, ${c.naranja}, ${c.amarillo})` }}
-                animate={{ x: ['-100%', '100%'] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              />
+                animate={{ x: ['-100%', '100%'] }} transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }} />
             </div>
           </div>
         </div>
@@ -157,9 +132,124 @@ export default function Dashboard() {
   }
 
   // ============================================
-  // TABS (sin cambios, igual que antes)
+  // NUEVA PESTAÑA: RANKING SEMANAL
   // ============================================
+  const TabRanking = () => {
+    const [ranking, setRanking] = useState([]);
+    const [semana, setSemana] = useState({ inicio: '', fin: '' });
+    const [loadingRanking, setLoadingRanking] = useState(true);
+    const medallas = ['🥇', '🥈', '🥉', '🏅'];
 
+    useEffect(() => {
+      cargarRanking();
+    }, []);
+
+    const cargarRanking = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('http://localhost:8000/api/reporte-semanal', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        setRanking(res.data.ranking || []);
+        setSemana(res.data.semana || {});
+      } catch (err) {
+        console.error('Error al cargar ranking:', err);
+      } finally {
+        setLoadingRanking(false);
+      }
+    };
+
+    if (loadingRanking) {
+      return <div className="text-center py-12"><div className="animate-spin text-4xl mb-4">⏳</div><p className="text-gray-500">Cargando ranking...</p></div>;
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
+          <h3 className="text-2xl font-extrabold text-gray-800 mb-2">🏆 Ranking Semanal de Auxiliares</h3>
+          <div className="flex items-center justify-center gap-2 text-gray-500 mb-2">
+            <FaCalendarAlt />
+            <span className="font-medium">{semana.inicio} al {semana.fin}</span>
+          </div>
+          <div className="text-xs text-gray-400">
+            🖥️ PC = 1pto | 🖨️ Impresora = 1pto | 🌐 Red = 1pto | 📌 Otro = 1pto
+          </div>
+        </div>
+
+        {/* PODIO TOP 3 */}
+        {ranking.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {ranking.slice(0, 3).map((aux, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.2 }}
+                className={`bg-white rounded-2xl shadow-xl p-6 text-center border-t-4 ${
+                  i === 0 ? 'border-yellow-400' : i === 1 ? 'border-gray-300' : 'border-orange-400'
+                }`}>
+                <span className="text-5xl">{medallas[i]}</span>
+                <h3 className="text-xl font-bold mt-2">{aux.nombre}</h3>
+                <div className="mt-3">
+                  <div className="flex items-center justify-center gap-2 text-3xl font-extrabold text-blue-600">
+                    <FaStar className="text-yellow-400" />{aux.puntos}
+                  </div>
+                  <p className="text-sm text-gray-500">puntos</p>
+                </div>
+                <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-2 text-xs text-gray-600">
+                  <div className="flex items-center gap-1 justify-center"><FaLaptop /> {aux.tickets_pc}</div>
+                  <div className="flex items-center gap-1 justify-center"><FaPrint /> {aux.tickets_impresora}</div>
+                  <div className="flex items-center gap-1 justify-center"><FaGlobe /> {aux.tickets_red}</div>
+                  <div className="flex items-center gap-1 justify-center">📌 {aux.tickets_otro}</div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* TABLA COMPLETA */}
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          <div className="p-4 bg-gradient-to-r from-gray-800 to-gray-700 text-white">
+            <h3 className="text-lg font-bold flex items-center gap-2"><FaTrophy className="text-yellow-400" />Tabla de Posiciones</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr className="text-xs text-gray-500 uppercase">
+                  <th className="p-4 text-left">#</th>
+                  <th className="p-4 text-left">Auxiliar</th>
+                  <th className="p-4 text-center">🖥️ PC</th>
+                  <th className="p-4 text-center">🖨️ Imp.</th>
+                  <th className="p-4 text-center">🌐 Red</th>
+                  <th className="p-4 text-center">📌 Otros</th>
+                  <th className="p-4 text-center">⭐ Puntos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ranking.length === 0 ? (
+                  <tr><td colSpan="7" className="p-8 text-center text-gray-400">No hay tickets resueltos esta semana</td></tr>
+                ) : (
+                  ranking.map((aux, i) => (
+                    <tr key={i} className={`border-b hover:bg-gray-50 ${i < 3 ? 'font-bold bg-yellow-50/30' : ''}`}>
+                      <td className="p-4"><span className="text-lg">{i < 3 ? medallas[i] : i + 1}</span></td>
+                      <td className="p-4">{aux.nombre}</td>
+                      <td className="p-4 text-center">{aux.tickets_pc}</td>
+                      <td className="p-4 text-center">{aux.tickets_impresora}</td>
+                      <td className="p-4 text-center">{aux.tickets_red}</td>
+                      <td className="p-4 text-center">{aux.tickets_otro}</td>
+                      <td className="p-4 text-center">
+                        <span className="bg-blue-600 text-white px-4 py-1.5 rounded-full font-bold text-sm shadow-md">{aux.puntos}</span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // TABS EXISTENTES (sin cambios)
+  // ============================================
   const TabGeneral = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -178,7 +268,6 @@ export default function Dashboard() {
           </motion.div>
         ))}
       </div>
-
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl p-5 shadow-lg">
           <h3 className="font-extrabold text-gray-800 mb-4">📈 Tickets por Mes</h3>
@@ -230,9 +319,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-2xl p-5 shadow-lg">
           <h3 className="font-extrabold text-gray-800 mb-4">📋 Todos los Tickets</h3>
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-gray-400 text-xs border-b">
-              <th className="pb-2">Folio</th><th className="pb-2">Título</th><th className="pb-2">Estado</th><th className="pb-2">Fecha</th>
-            </tr></thead>
+            <thead><tr className="text-left text-gray-400 text-xs border-b"><th className="pb-2">Folio</th><th className="pb-2">Título</th><th className="pb-2">Estado</th><th className="pb-2">Fecha</th></tr></thead>
             <tbody>
               {stats.ultimos_tickets?.map((t, i) => (
                 <tr key={i} className="border-t hover:bg-gray-50">
@@ -383,6 +470,7 @@ export default function Dashboard() {
             {activeTab === 'rendimiento' && <TabRendimiento />}
             {activeTab === 'auxiliares' && <TabAuxiliares />}
             {activeTab === 'dependencias' && <TabDependencias />}
+            {activeTab === 'ranking' && <TabRanking />}
           </motion.div>
         </AnimatePresence>
       </div>
