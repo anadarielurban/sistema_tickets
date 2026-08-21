@@ -51,6 +51,35 @@ export default function TicketsLista() {
     }
   };
 
+  // ----- ELIMINAR TICKET (soft delete) -----
+  const eliminarTicket = async (id) => {
+    if (!window.confirm('¿Estás seguro de eliminar este ticket?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:8000/api/tickets/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      cargarTickets();
+    } catch (err) {
+      console.error(err);
+      alert('No se pudo eliminar el ticket.');
+    }
+  };
+
+  // ----- RESTAURAR TICKET -----
+  const restaurarTicket = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:8000/api/tickets/${id}/restaurar`, {}, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      cargarTickets();
+    } catch (err) {
+      console.error(err);
+      alert('No se pudo restaurar el ticket.');
+    }
+  };
+
   const c = {
     azul: '#2C5282', azulOscuro: '#1A365D', azulClaro: '#4299E1',
     verde: '#48BB78', naranja: '#ED8936', amarillo: '#ECC94B',
@@ -235,10 +264,16 @@ export default function TicketsLista() {
                       </div>
 
                       <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                        <span className="px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm"
-                          style={{ background: estados[ticket.estado]?.color }}>
-                          {estados[ticket.estado]?.label}
-                        </span>
+                        {/* Badge: Estado o Eliminado */}
+                        {ticket.deleted_at ? (
+                          <span className="px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm" style={{ background: '#E53E3E' }}>
+                            Eliminado
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm" style={{ background: estados[ticket.estado]?.color }}>
+                            {estados[ticket.estado]?.label}
+                          </span>
+                        )}
                         <span className="text-[10px] text-gray-400 flex items-center gap-1">
                           <FaCalendarAlt /> {new Date(ticket.created_at).toLocaleDateString('es-MX')}
                         </span>
@@ -246,8 +281,8 @@ export default function TicketsLista() {
                     </div>
 
                     {/* Botones de acción */}
-                    <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-                      {ticket.estado === 'pendiente' && user?.rol === 'auxiliar' && (
+                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+                      {!ticket.deleted_at && ticket.estado === 'pendiente' && user?.rol === 'auxiliar' && (
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
@@ -257,7 +292,7 @@ export default function TicketsLista() {
                           <FaHandPaper /> Tomar Ticket
                         </motion.button>
                       )}
-                      {ticket.estado === 'en_proceso' && ticket.auxiliar_id === user?.id && (
+                      {!ticket.deleted_at && ticket.estado === 'en_proceso' && ticket.auxiliar_id === user?.id && (
                         <Link to={`/diagnostico/${ticket.id}`} className="flex-1">
                           <motion.button
                             whileHover={{ scale: 1.02 }}
@@ -269,10 +304,30 @@ export default function TicketsLista() {
                           </motion.button>
                         </Link>
                       )}
-                      {/* ✅ CORREGIDO: Redirige a VerTicket */}
                       <Link to={`/ver-ticket/${ticket.id}`} className="flex items-center gap-1 px-3 py-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
                         <FaEye /> Ver detalle
                       </Link>
+
+                      {/* NUEVO: Eliminar / Restaurar */}
+                      {ticket.deleted_at ? (
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => restaurarTicket(ticket.id)}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white text-sm font-bold rounded-xl hover:bg-green-600 transition-all"
+                        >
+                          ♻️ Restaurar
+                        </motion.button>
+                      ) : (
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => eliminarTicket(ticket.id)}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-sm font-bold rounded-xl hover:bg-red-600 transition-all"
+                        >
+                          🗑️ Eliminar
+                        </motion.button>
+                      )}
                     </div>
                   </div>
                 </motion.div>

@@ -6,15 +6,6 @@ use App\Http\Controllers\Api\EstadisticasController;
 use App\Http\Controllers\Api\ReporteController;
 use Illuminate\Support\Facades\Route;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Aquí están todas las rutas que tu frontend y tu bot de WhatsApp
-| van a consumir.
-|
-*/
 
 // =============================================
 // RUTAS PÚBLICAS (no requieren token)
@@ -38,23 +29,29 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
 
     // ---- DEPENDENCIAS Y PERSONAS ----
-    // Estas dos rutas las usa el bot para obtener la lista de departamentos
-    // y las personas de cada departamento.
     Route::get('/dependencias', [AuthController::class, 'dependencias']);
     Route::get('/dependencias/{id}/personas', [AuthController::class, 'personasPorDependencia']);
 
     // ---- TICKETS ----
-    // ÉSTA es la ruta que tu bot debe llamar para CREAR un ticket
-    Route::post('/tickets', [TicketController::class, 'store']);   // <--- AQUÍ
+    // Crear ticket (lo usa el bot)
+    Route::post('/tickets', [TicketController::class, 'store']);
 
-    // Las demás rutas de tickets (listar, ver, tomar, diagnosticar, cancelar)
+    // Listar, ver, tomar, diagnosticar, cancelar
     Route::get('/tickets', [TicketController::class, 'index']);
     Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
     Route::post('/tickets/{ticket}/tomar', [TicketController::class, 'tomar']);
     Route::post('/tickets/{ticket}/diagnosticar', [TicketController::class, 'diagnosticar']);
     Route::post('/tickets/{ticket}/cancelar', [TicketController::class, 'cancelar']);
-    Route::get('/mis-tickets-hoy', [TicketController::class, 'misTicketsHoy']);
+
+    // ✅ NUEVAS RUTAS PARA SOFT DELETE
+    // Eliminar (soft delete) – visible para todos los roles
+    Route::delete('/tickets/{ticket}', [TicketController::class, 'destroy']);
+    // Restaurar un ticket eliminado
+    Route::post('/tickets/{ticket}/restaurar', [TicketController::class, 'restore']);
 
     // ---- ESTADÍSTICAS ----
     Route::get('/estadisticas/dashboard', [EstadisticasController::class, 'dashboard']);
+
+    // ---- MIS TICKETS HOY ----
+    Route::get('/mis-tickets-hoy', [TicketController::class, 'misTicketsHoy']);
 });

@@ -15,7 +15,9 @@ class TicketController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = Ticket::with(['solicitante', 'dependencia', 'auxiliar', 'creadoPor']);
+        // 🔽 Incluye tickets eliminados (soft delete)
+        $query = Ticket::withTrashed()
+                       ->with(['solicitante', 'dependencia', 'auxiliar', 'creadoPor']);
 
         if ($user->esSolicitante()) {
             $query->where('solicitante_id', $user->id);
@@ -127,9 +129,6 @@ class TicketController extends Controller
         }
     }
 
-    // ==========================================
-    // ✅ DIAGNÓSTICO CORREGIDO - GUARDA FOTO
-    // ==========================================
     public function diagnosticar(Ticket $ticket, Request $request)
     {
         $user = $request->user();
@@ -161,7 +160,6 @@ class TicketController extends Controller
                     mkdir($destino, 0777, true);
                 }
                 
-                // Intentar mover el archivo
                 try {
                     $archivo->move($destino, $nombre);
                     if (file_exists($destino . $nombre)) {
@@ -172,7 +170,6 @@ class TicketController extends Controller
                     Log::error('Error con move(): ' . $e->getMessage());
                 }
             } 
-            // Si hasFile falla, intentar con $_FILES
             elseif (!empty($_FILES['foto_comprobacion']['tmp_name'])) {
                 $extension = pathinfo($_FILES['foto_comprobacion']['name'], PATHINFO_EXTENSION);
                 $nombre = 'ticket_' . $ticket->id . '_' . time() . '.' . $extension;
@@ -188,7 +185,6 @@ class TicketController extends Controller
                 }
             }
 
-            // ✅ GUARDAR EN BD
             $ticket->update($datos);
             
             Log::info('Datos guardados: ' . json_encode($datos));
@@ -224,6 +220,73 @@ class TicketController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => 'Error al cancelar el ticket'], 500);
+        }
+    }
+
+    /**
+     * Eliminar (soft delete) un ticket.
+     * El ticket quedará visible para todos los roles con la etiqueta "Eliminado".
+     */
+    public function destroy(Ticket $ticket, Request $request)
+    {
+        // (Opcional) Verificar permisos: solo administradores o auxiliares pueden eliminar
+        // $user = $request->user();
+        // if (!$user->esAdmin() && !$user->esAuxiliar()) {
+        //     return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
+        // }
+
+        try {
+            DB::beginTransaction();
+            
+            $ticket->delete(); // Soft delete
+
+            $this->registrarHistorial(
+                $ticket,
+                'eliminado',
+                'Ticket eliminado por ' . $request->user()->nombre_completo
+            );
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Ticket eliminado correctamente'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al eliminar ticket: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al eliminar el ticket'], 500);
+        }
+    }
+
+    /**
+     * Restaurar un ticket eliminado (soft delete).
+     */
+    public function restore($id, Request $request)
+    {
+        try {
+            $ticket = Ticket::withTrashed()->findOrFail($id);
+            
+            DB::beginTransaction();
+            
+            $ticket->restore();
+
+            $this->registrarHistorial(
+                $ticket,
+                'restaurado',
+                'Ticket restaurado por ' . $request->user()->nombre_completo
+            );
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Ticket restaurado correctamente'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error al restaurar ticket: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al restaurar el ticket'], 500);
         }
     }
 
