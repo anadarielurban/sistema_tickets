@@ -2,11 +2,11 @@ import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode-terminal';
 import axios from 'axios';
-import https from 'https'; // Para ignorar SSL (solo desarrollo)
+import https from 'https';
 
 // ========== CONFIGURACIÓN ==========
 const API_BASE = 'http://localhost:8000/api';
-const API_TOKEN = '14|nHXLHCmrsV8iuDw4Pi0dXOkXxyOW1539HTVwwuKPf0fd58ac'; // Token generado en Laravel
+const API_TOKEN = '14|nHXLHCmrsV8iuDw4Pi0dXOkXxyOW1539HTVwwuKPf0fd58ac';
 
 // ========== CLIENTE WHATSAPP ==========
 const client = new Client({
@@ -26,12 +26,44 @@ async function sendMessage(message, text) {
     }
 }
 
-// Configuración de axios (desactiva SSL en desarrollo)
+async function sendServiceUnavailable(message) {
+    const errorMsg = 
+        '⚠️ *SERVICIO TEMPORALMENTE NO DISPONIBLE*\n\n' +
+        'Lo sentimos, el bot está fuera de servicio en este momento.\n' +
+        'Estaremos disponibles en unos momentos.\n\n' +
+        '📱 Por favor, intenta enviar tu mensaje más tarde.\n' +
+        '¡Gracias por tu comprensión! 🙏';
+    
+    await sendMessage(message, errorMsg);
+    console.log('⚠️ Mensaje de servicio no disponible enviado');
+}
+
+// Configuración de axios
 const axiosInstance = axios.create({
-    httpsAgent: new https.Agent({ rejectUnauthorized: false })
+    httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+    timeout: 10000 // 10 segundos de timeout
 });
 
-// ========== OBTENER DEPENDENCIAS DESDE LA API ==========
+// ========== FUNCIONES DE LA API ==========
+
+// Verificar salud del servicio usando la ruta /dependencias (que existe)
+async function checkServiceHealth() {
+    try {
+        const res = await axiosInstance.get(`${API_BASE}/dependencias`, {
+            headers: { Authorization: `Bearer ${API_TOKEN}` },
+            timeout: 5000
+        });
+        return res.status === 200;
+    } catch (error) {
+        console.error('❌ Health check falló:', error.message);
+        if (error.response) {
+            console.error('   Status:', error.response.status);
+            console.error('   Data:', error.response.data);
+        }
+        return false;
+    }
+}
+
 async function getDependencias() {
     try {
         const res = await axiosInstance.get(`${API_BASE}/dependencias`, {
@@ -40,11 +72,10 @@ async function getDependencias() {
         return res.data;
     } catch (error) {
         console.error('Error al obtener dependencias:', error.message);
-        return [];
+        throw error;
     }
 }
 
-// ========== OBTENER PERSONAS DE UNA DEPENDENCIA ==========
 async function getPersonas(dependenciaId) {
     try {
         const res = await axiosInstance.get(`${API_BASE}/dependencias/${dependenciaId}/personas`, {
@@ -53,11 +84,10 @@ async function getPersonas(dependenciaId) {
         return res.data;
     } catch (error) {
         console.error('Error al obtener personas:', error.message);
-        return [];
+        throw error;
     }
 }
 
-// ========== CREAR TICKET ==========
 async function createTicket(data) {
     try {
         const res = await axiosInstance.post(`${API_BASE}/tickets`, data, {
@@ -76,140 +106,214 @@ async function createTicket(data) {
 // ========== MANEJADOR DE MENSAJES ==========
 client.on('message', async (message) => {
     if (message.fromMe) return;
+    
     const from = message.from;
-    const texto = message.body.trim();
-
-    // Inicializar estado si no existe
-    if (!userStates.has(from)) {
-        userStates.set(from, {
-            step: 0,
-            data: {},
-            dependencias: [],
-            personas: [],
-            tipos: [
-                { value: 'computadora', label: 'Computadora' },
-                { value: 'impresora', label: 'Impresora' },
-                { value: 'red', label: 'Internet / Red' },
-                { value: 'otro', label: 'Otro' }
-            ]
-        });
-    }
-
-    const state = userStates.get(from);
-    const step = state.step;
+    const texto = message.body ? message.body.trim() : '';
+    
+    if (!texto) return;
 
     try {
-        // ===== PASO 0: SALUDO Y SOLICITAR DEPARTAMENTO =====
+        // ===== VERIFICAR SALUD DEL SERVICIO =====
+        const isHealthy = await checkServiceHealth();
+        if (!isHealthy) {
+            await sendServiceUnavailable(message);
+            return;
+        }
+
+        // ===== INICIALIZAR ESTADO =====
+        if (!userStates.has(from)) {
+            userStates.set(from, {
+                step: 0,
+                data: {},
+                dependencias: [],
+                personas: [],
+                tipos: [
+                    { value: 'computadora', label: '💻 Computadora' },
+                    { value: 'impresora', label: '🖨️ Impresora' },
+                    { value: 'red', label: '🌐 Internet / Red' },
+                    { value: 'software', label: '📱 Software' },
+                    { value: 'hardware', label: '🔧 Hardware' },
+                    { value: 'otro', label: '📌 Otro' }
+                ]
+            });
+        }
+
+        const state = userStates.get(from);
+        const step = state.step;
+
+        // ===== PASO 0: SALUDO =====
         if (step === 0) {
-            if (texto.toLowerCase().includes('hola') || texto.toLowerCase().includes('ticket')) {
-                const dependencias = await getDependencias();
-                if (dependencias.length === 0) {
-                    await sendMessage(message, '❌ No se pudieron cargar los departamentos. Intenta más tarde.');
+            if (texto.toLowerCase().includes('hola') || 
+                texto.toLowerCase().includes('ticket') ||
+                texto.toLowerCase().includes('crear')) {
+                
+                try {
+                    const dependencias = await getDependencias();
+                    
+                    if (!dependencias || dependencias.length === 0) {
+                        await sendMessage(message, '❌ No hay departamentos disponibles en el sistema.');
+                        userStates.delete(from);
+                        return;
+                    }
+                    
+                    state.dependencias = dependencias;
+                    let list = '📋 *Lista de departamentos:*\n\n';
+                    dependencias.forEach((d, i) => {
+                        const nombre = d.nombre || 'Sin nombre';
+                        const abreviatura = d.abreviatura || '---';
+                        list += `${i+1}. ${nombre} (${abreviatura})\n`;
+                    });
+                    list += '\nResponde con el *número* del departamento o escribe el *nombre* exacto.';
+                    
+                    await sendMessage(message, '👋 ¡Hola! Vamos a crear tu ticket.\n\n' + list);
+                    state.step = 1;
+                } catch (error) {
+                    await sendServiceUnavailable(message);
                     userStates.delete(from);
-                    return;
                 }
-                state.dependencias = dependencias;
-                let list = '📋 *Lista de departamentos:*\n';
-                dependencias.forEach((d, i) => {
-                    list += `${i+1}. ${d.nombre} (${d.abreviatura})\n`;
-                });
-                list += '\nResponde con el *número* del departamento o escribe el *nombre* exacto.';
-                await sendMessage(message, '👋 ¡Hola! Vamos a crear tu ticket.\n' + list);
-                state.step = 1;
             } else {
-                await sendMessage(message, '👋 Para crear un ticket, escríbeme "hola" o "ticket".');
+                await sendMessage(message, '👋 Para crear un ticket, escríbeme "hola", "ticket" o "crear".');
             }
             return;
         }
 
         // ===== PASO 1: SELECCIONAR DEPARTAMENTO =====
         if (step === 1) {
-            const depSeleccionado = state.dependencias.find((d, i) => 
-                texto === `${i+1}` || 
-                texto.toLowerCase() === d.nombre.toLowerCase() ||
-                texto.toLowerCase() === d.abreviatura.toLowerCase()
-            );
-            if (!depSeleccionado) {
-                await sendMessage(message, '❌ No encontré ese departamento. Escribe el número de la lista o el nombre exacto.');
+            if (!texto) {
+                await sendMessage(message, '❌ Por favor, escribe el número o nombre del departamento.');
                 return;
             }
-            state.data.dependencia_id = depSeleccionado.id;
-            state.data.dependencia_nombre = depSeleccionado.nombre;
 
-            const personas = await getPersonas(depSeleccionado.id);
-            state.personas = personas;
-
-            if (personas.length > 0) {
-                let list = `📋 Personas en "${depSeleccionado.nombre}":\n`;
-                personas.forEach((p, i) => {
-                    // Construir nombre completo a partir de los campos de la tabla `usuarios`
-                    let nombreCompleto = `${p.nombre} ${p.apellido_paterno}`;
-                    if (p.apellido_materno) {
-                        nombreCompleto += ` ${p.apellido_materno}`;
-                    }
-                    list += `${i+1}. ${nombreCompleto}\n`;
+            try {
+                // Buscar departamento
+                const depSeleccionado = state.dependencias.find((d, i) => {
+                    const numero = `${i+1}`;
+                    const nombre = d.nombre ? d.nombre.toLowerCase() : '';
+                    const abreviatura = d.abreviatura ? d.abreviatura.toLowerCase() : '';
+                    const textoLower = texto.toLowerCase();
+                    
+                    return numero === texto || 
+                           nombre === textoLower || 
+                           abreviatura === textoLower;
                 });
-                list += '\nResponde con el *número* de la persona que reporta, o escribe *"otro"* si no aparece.';
-                await sendMessage(message, list);
-                state.step = 2;
-            } else {
-                await sendMessage(message, 'No hay personas registradas en este departamento. Escribe el nombre completo de quien reporta:');
-                state.step = 3;
+
+                if (!depSeleccionado) {
+                    await sendMessage(message, '❌ No encontré ese departamento. Escribe el número de la lista o el nombre exacto.');
+                    return;
+                }
+                
+                state.data.dependencia_id = depSeleccionado.id;
+                state.data.dependencia_nombre = depSeleccionado.nombre || 'Departamento';
+
+                // Obtener personas del departamento
+                const personas = await getPersonas(depSeleccionado.id);
+                state.personas = personas || [];
+
+                if (personas && personas.length > 0) {
+                    let list = `📋 *Personas en "${depSeleccionado.nombre || 'Departamento'}":*\n\n`;
+                    personas.forEach((p, i) => {
+                        const nombre = p.nombre || '';
+                        const apellidoPaterno = p.apellido_paterno || '';
+                        const apellidoMaterno = p.apellido_materno || '';
+                        let nombreCompleto = `${nombre} ${apellidoPaterno}`.trim();
+                        if (apellidoMaterno) {
+                            nombreCompleto += ` ${apellidoMaterno}`;
+                        }
+                        if (!nombreCompleto.trim()) {
+                            nombreCompleto = `Usuario ${i+1}`;
+                        }
+                        list += `${i+1}. ${nombreCompleto}\n`;
+                    });
+                    list += '\nResponde con el *número* de la persona que reporta, o escribe *"otro"* si no aparece.';
+                    
+                    await sendMessage(message, list);
+                    state.step = 2;
+                } else {
+                    await sendMessage(message, '📝 No hay personas registradas en este departamento. Escribe el nombre completo de quien reporta:');
+                    state.step = 3;
+                }
+            } catch (error) {
+                await sendServiceUnavailable(message);
+                userStates.delete(from);
             }
             return;
         }
 
         // ===== PASO 2: SELECCIONAR PERSONA =====
         if (step === 2) {
+            if (!texto) {
+                await sendMessage(message, '❌ Por favor, elige un número de la lista o escribe "otro".');
+                return;
+            }
+
             if (texto.toLowerCase() === 'otro') {
-                await sendMessage(message, 'Escribe el nombre completo de la persona que reporta:');
+                await sendMessage(message, '📝 Escribe el nombre completo de la persona que reporta:');
                 state.step = 3;
                 return;
             }
+            
             const idx = parseInt(texto) - 1;
             if (isNaN(idx) || idx < 0 || idx >= state.personas.length) {
                 await sendMessage(message, '❌ Número inválido. Elige un número de la lista o escribe "otro".');
                 return;
             }
+            
             const persona = state.personas[idx];
             state.data.solicitante_id = persona.id;
-            // Guardamos nombre completo para mostrar en resumen
-            let nombreCompleto = `${persona.nombre} ${persona.apellido_paterno}`;
-            if (persona.apellido_materno) {
-                nombreCompleto += ` ${persona.apellido_materno}`;
+            
+            // Construir nombre completo
+            const nombre = persona.nombre || '';
+            const apellidoPaterno = persona.apellido_paterno || '';
+            const apellidoMaterno = persona.apellido_materno || '';
+            let nombreCompleto = `${nombre} ${apellidoPaterno}`.trim();
+            if (apellidoMaterno) {
+                nombreCompleto += ` ${apellidoMaterno}`;
             }
-            state.data.nombre_usuario = nombreCompleto;
+            state.data.nombre_usuario = nombreCompleto || 'Usuario';
+            
             await preguntarTipo(message, state);
             return;
         }
 
-        // ===== PASO 3: NOMBRE DEL SOLICITANTE (cuando no está en lista) =====
+        // ===== PASO 3: NOMBRE DEL SOLICITANTE (manual) =====
         if (step === 3) {
+            if (!texto || texto.trim() === '') {
+                await sendMessage(message, '❌ Por favor, escribe un nombre válido.');
+                return;
+            }
+            
             state.data.nombre_usuario = texto;
-            // Usamos el ID del usuario bot como solicitante por defecto
+            // Como no tenemos ID, usamos un ID por defecto (1 o el del bot)
             state.data.solicitante_id = 8; // ID del usuario bot
+            
             await preguntarTipo(message, state);
             return;
         }
 
-        // ===== FUNCIÓN PARA PREGUNTAR TIPO (reutilizada) =====
+        // ===== FUNCIÓN PARA PREGUNTAR TIPO =====
         async function preguntarTipo(msg, st) {
-            let list = '📋 *Tipo de problema:*\n';
+            let list = '📋 *Tipo de problema:*\n\n';
             st.tipos.forEach((t, i) => {
                 list += `${i+1}. ${t.label}\n`;
             });
-            list += '\nResponde con el *número* del tipo.';
+            list += '\nResponde con el *número* del tipo de problema.';
             await sendMessage(msg, list);
             st.step = 4;
         }
 
         // ===== PASO 4: SELECCIONAR TIPO =====
         if (step === 4) {
+            if (!texto) {
+                await sendMessage(message, '❌ Por favor, elige un número de la lista.');
+                return;
+            }
+            
             const idx = parseInt(texto) - 1;
             if (isNaN(idx) || idx < 0 || idx >= state.tipos.length) {
                 await sendMessage(message, '❌ Número inválido. Elige un número de la lista.');
                 return;
             }
+            
             state.data.tipo = state.tipos[idx].value;
             await sendMessage(message, '📝 Escribe un *título breve* para el problema (máx 100 caracteres):');
             state.step = 5;
@@ -218,6 +322,11 @@ client.on('message', async (message) => {
 
         // ===== PASO 5: TÍTULO =====
         if (step === 5) {
+            if (!texto || texto.trim() === '') {
+                await sendMessage(message, '❌ Por favor, escribe un título válido.');
+                return;
+            }
+            
             state.data.titulo = texto.substring(0, 100);
             await sendMessage(message, '📝 Ahora describe el problema con más detalle:');
             state.step = 6;
@@ -226,6 +335,11 @@ client.on('message', async (message) => {
 
         // ===== PASO 6: DESCRIPCIÓN =====
         if (step === 6) {
+            if (!texto || texto.trim() === '') {
+                await sendMessage(message, '❌ Por favor, escribe una descripción válida.');
+                return;
+            }
+            
             state.data.descripcion = texto;
             await sendMessage(message, '📍 ¿En qué ubicación se encuentra el problema? (ej. Oficina 203, Planta Baja)');
             state.step = 7;
@@ -234,70 +348,144 @@ client.on('message', async (message) => {
 
         // ===== PASO 7: UBICACIÓN =====
         if (step === 7) {
+            if (!texto || texto.trim() === '') {
+                await sendMessage(message, '❌ Por favor, escribe una ubicación válida.');
+                return;
+            }
+            
             state.data.ubicacion = texto;
 
+            // Mostrar resumen
+            const tipoLabel = state.tipos.find(t => t.value === state.data.tipo)?.label || 'No especificado';
+            
             const resumen = 
                 `📋 *Resumen del ticket*\n\n` +
-                `🏢 Departamento: ${state.data.dependencia_nombre}\n` +
-                `👤 Solicitante: ${state.data.nombre_usuario}\n` +
-                `🔧 Tipo: ${state.tipos.find(t => t.value === state.data.tipo)?.label}\n` +
-                `📌 Título: ${state.data.titulo}\n` +
-                `📝 Descripción: ${state.data.descripcion}\n` +
-                `📍 Ubicación: ${state.data.ubicacion}\n\n` +
-                `¿Confirmas estos datos? Responde *si* o *no*.`;
+                `🏢 Departamento: ${state.data.dependencia_nombre || 'No especificado'}\n` +
+                `👤 Solicitante: ${state.data.nombre_usuario || 'No especificado'}\n` +
+                `🔧 Tipo: ${tipoLabel}\n` +
+                `📌 Título: ${state.data.titulo || 'No especificado'}\n` +
+                `📝 Descripción: ${state.data.descripcion || 'No especificado'}\n` +
+                `📍 Ubicación: ${state.data.ubicacion || 'No especificado'}\n\n` +
+                `✅ ¿Confirmas estos datos?\n` +
+                `Responde *si* o *no*.`;
+            
             await sendMessage(message, resumen);
             state.step = 8;
             return;
         }
 
-        // ===== PASO 8: CONFIRMACIÓN Y CREACIÓN =====
+        // ===== PASO 8: CONFIRMACIÓN =====
         if (step === 8) {
+            if (!texto) {
+                await sendMessage(message, '❌ Responde *si* o *no* para confirmar.');
+                return;
+            }
+
             if (texto.toLowerCase() === 'si' || texto.toLowerCase() === 'sí') {
                 try {
                     const ticketData = {
-                        solicitante_id: state.data.solicitante_id,
+                        solicitante_id: state.data.solicitante_id || 8,
                         dependencia_id: state.data.dependencia_id,
-                        tipo: state.data.tipo,
-                        titulo: state.data.titulo,
-                        descripcion: state.data.descripcion,
-                        ubicacion: state.data.ubicacion,
+                        tipo: state.data.tipo || 'otro',
+                        titulo: state.data.titulo || 'Sin título',
+                        descripcion: state.data.descripcion || 'Sin descripción',
+                        ubicacion: state.data.ubicacion || 'No especificada',
                     };
 
+                    console.log('📝 Creando ticket con datos:', ticketData);
+                    
                     const result = await createTicket(ticketData);
+                    
                     await sendMessage(message, 
-                        `✅ ¡Ticket creado con éxito!\n` +
+                        `✅ *¡Ticket creado con éxito!*\n\n` +
                         `📄 Folio: ${result.ticket?.folio || 'N/A'}\n` +
-                        `Un técnico atenderá tu caso pronto. ¡Gracias!`
+                        `🔧 Tipo: ${state.tipos.find(t => t.value === state.data.tipo)?.label || 'No especificado'}\n` +
+                        `🏢 Departamento: ${state.data.dependencia_nombre || 'No especificado'}\n\n` +
+                        `Un técnico atenderá tu caso pronto. ¡Gracias! 🙌`
                     );
+                    
+                    console.log(`✅ Ticket creado para ${state.data.nombre_usuario}`);
+                    
                 } catch (error) {
-                    await sendMessage(message, '❌ Error al crear el ticket. Intenta más tarde.');
+                    console.error('❌ Error al crear ticket:', error.message);
+                    if (error.response) {
+                        console.error('   Status:', error.response.status);
+                        console.error('   Data:', error.response.data);
+                    }
+                    await sendServiceUnavailable(message);
                 }
+                
                 userStates.delete(from);
+                
             } else if (texto.toLowerCase() === 'no' || texto.toLowerCase() === 'n') {
-                await sendMessage(message, '🔄 Vamos a empezar de nuevo. Escribe "hola" para reiniciar.');
+                await sendMessage(message, '🔄 *Reiniciando proceso*\n\nEscribe "hola" para comenzar de nuevo.');
                 userStates.delete(from);
             } else {
-                await sendMessage(message, 'Responde *si* o *no* para confirmar.');
+                await sendMessage(message, '❌ Responde *si* o *no* para confirmar los datos.');
             }
             return;
         }
 
+        // ===== ESTADO POR DEFECTO =====
         userStates.delete(from);
-        await sendMessage(message, '⚠️ Parece que hubo un error. Escribe "hola" para empezar de nuevo.');
+        await sendMessage(message, 
+            '⚠️ *Flujo reiniciado*\n\n' +
+            'Parece que hubo un error en el proceso. Escribe "hola" para empezar de nuevo.'
+        );
 
     } catch (error) {
-        console.error('Error general:', error);
-        await sendMessage(message, '❌ Ocurrió un error inesperado. Intenta de nuevo.');
+        console.error('❌ Error general:', error);
+        await sendServiceUnavailable(message);
         userStates.delete(from);
     }
 });
 
 // ========== INICIALIZAR BOT ==========
 client.on('qr', (qr) => {
-    console.log('\n📱 ESCANEA EN WHATSAPP WEB:\n');
+    console.log('\n📱 ESCANEA EL CÓDIGO QR CON WHATSAPP:\n');
     qrcode.generate(qr, { small: true });
+    console.log('\n⏳ Esperando conexión...\n');
 });
 
-client.on('ready', () => console.log('\n✅ BOT CONECTADO\n'));
+client.on('ready', () => {
+    console.log('\n✅ BOT CONECTADO Y LISTO');
+    console.log('📱 El bot está activo y esperando mensajes\n');
+});
 
+client.on('auth_failure', (msg) => {
+    console.error('❌ Error de autenticación:', msg);
+});
+
+client.on('disconnected', (reason) => {
+    console.log('⚠️ Bot desconectado:', reason);
+});
+
+// Iniciar el bot
+console.log('\n🚀 Iniciando bot de WhatsApp...\n');
+console.log(`📡 API Base: ${API_BASE}`);
+console.log(`🔑 Token: ${API_TOKEN.substring(0, 20)}...\n`);
 client.initialize();
+
+// ========== MANEJO DE ERRORES GLOBALES ==========
+process.on('unhandledRejection', (error) => {
+    console.error('❌ Error no manejado:', error);
+});
+
+process.on('SIGINT', () => {
+    console.log('\n\n🛑 Deteniendo bot...');
+    process.exit();
+});
+
+// ========== HEALTH CHECK PERIÓDICO ==========
+setInterval(async () => {
+    try {
+        const isHealthy = await checkServiceHealth();
+        if (isHealthy) {
+            console.log('✅ Health check: OK');
+        } else {
+            console.log('⚠️ Health check: FALLÓ');
+        }
+    } catch (error) {
+        console.log('⚠️ Health check: ERROR', error.message);
+    }
+}, 60000); // Cada minuto
