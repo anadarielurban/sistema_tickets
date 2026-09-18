@@ -6,7 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaTicketAlt, FaClock, FaCheckCircle, FaSpinner, FaTimesCircle,
   FaSearch, FaFilter, FaSync, FaHandPaper, FaTools, FaEye,
-  FaUser, FaBuilding, FaMapMarkerAlt, FaCalendarAlt, FaPlus
+  FaUser, FaBuilding, FaMapMarkerAlt, FaCalendarAlt, FaPlus,
+  FaTimes, FaUndo  
 } from 'react-icons/fa';
 
 export default function TicketsLista() {
@@ -17,6 +18,7 @@ export default function TicketsLista() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('activos'); 
 
   useEffect(() => {
     setIsVisible(true);
@@ -51,7 +53,6 @@ export default function TicketsLista() {
     }
   };
 
-  // ----- ELIMINAR TICKET (soft delete) -----
   const eliminarTicket = async (id) => {
     if (!window.confirm('¿Estás seguro de eliminar este ticket?')) return;
     try {
@@ -66,7 +67,6 @@ export default function TicketsLista() {
     }
   };
 
-  // ----- RESTAURAR TICKET -----
   const restaurarTicket = async (id) => {
     try {
       const token = localStorage.getItem('token');
@@ -100,11 +100,15 @@ export default function TicketsLista() {
     otro: '❓',
   };
 
-  // Filtrar tickets
   const ticketsFiltrados = tickets.filter(ticket => {
+    if (activeTab === 'activos' && ticket.deleted_at) return false;
+    if (activeTab === 'eliminados' && !ticket.deleted_at) return false;
+
     const matchEstado = filtroEstado === 'todos' || ticket.estado === filtroEstado;
+
     const matchSearch = ticket.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         ticket.folio?.toLowerCase().includes(searchTerm.toLowerCase());
+
     return matchEstado && matchSearch;
   });
 
@@ -134,6 +138,9 @@ export default function TicketsLista() {
       </div>
     );
   }
+
+  const totalActivos = tickets.filter(t => !t.deleted_at).length;
+  const totalEliminados = tickets.filter(t => t.deleted_at).length;
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-blue-50">
@@ -204,11 +211,37 @@ export default function TicketsLista() {
             </div>
           </div>
 
+          {/* 🔽 NUEVO: PESTAÑAS ACTIVOS / ELIMINADOS */}
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={() => setActiveTab('activos')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'activos'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              📋 Activos ({totalActivos})
+            </button>
+            <button
+              onClick={() => setActiveTab('eliminados')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'eliminados'
+                  ? 'bg-red-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              🗑️ Eliminados ({totalEliminados})
+            </button>
+          </div>
+
           {/* LISTA DE TICKETS */}
           {ticketsFiltrados.length === 0 ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
               <FaTicketAlt className="text-6xl text-gray-300 mx-auto mb-4" />
-              <p className="text-xl font-bold text-gray-400">No se encontraron tickets</p>
+              <p className="text-xl font-bold text-gray-400">
+                {activeTab === 'activos' ? 'No hay tickets activos' : 'No hay tickets eliminados'}
+              </p>
               <p className="text-sm text-gray-400 mt-1">Intenta con otro filtro o crea uno nuevo</p>
             </motion.div>
           ) : (
@@ -220,7 +253,9 @@ export default function TicketsLista() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
                   whileHover={{ scale: 1.01 }}
-                  className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
+                  className={`bg-white rounded-2xl shadow-lg border overflow-hidden ${
+                    ticket.deleted_at ? 'border-red-200 opacity-75' : 'border-gray-100'
+                  }`}
                 >
                   <div className="p-4 md:p-5">
                     <div className="flex items-start justify-between gap-4">
@@ -308,24 +343,26 @@ export default function TicketsLista() {
                         <FaEye /> Ver detalle
                       </Link>
 
-                      {/* NUEVO: Eliminar / Restaurar */}
+                      {/* 🔽 NUEVO: Botones con íconos X y Deshacer */}
                       {ticket.deleted_at ? (
                         <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
                           onClick={() => restaurarTicket(ticket.id)}
-                          className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white text-sm font-bold rounded-xl hover:bg-green-600 transition-all"
+                          className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition-all"
+                          title="Restaurar ticket"
                         >
-                          ♻️ Restaurar
+                          <FaUndo className="w-3.5 h-3.5" />
                         </motion.button>
                       ) : (
                         <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
                           onClick={() => eliminarTicket(ticket.id)}
-                          className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-sm font-bold rounded-xl hover:bg-red-600 transition-all"
+                          className="flex items-center justify-center w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition-all"
+                          title="Eliminar ticket"
                         >
-                          🗑️ Eliminar
+                          <FaTimes className="w-3.5 h-3.5" />
                         </motion.button>
                       )}
                     </div>
@@ -336,7 +373,7 @@ export default function TicketsLista() {
           )}
 
           <div className="text-center text-xs text-gray-400">
-            Mostrando {ticketsFiltrados.length} de {tickets.length} tickets
+            Mostrando {ticketsFiltrados.length} de {activeTab === 'activos' ? totalActivos : totalEliminados} tickets {activeTab === 'activos' ? 'activos' : 'eliminados'}
           </div>
         </motion.div>
       </div>
